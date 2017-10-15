@@ -3,13 +3,70 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# C extensions
+# Object files
+*.o
+*.ko
+*.obj
+*.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+
+# Shared objects (inc. Windows DLLs)
+*.dll
 *.so
+*.so.*
+*.dylib
 
 # Distribution / packaging
 .Python
 env/
-build/
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Kernel Module Compile Results
+*.mod*
+*.cmd
+.tmp_versions/
+modules.order
+Module.symvers
+Mkfile.old
+dkms.conf
+
+#archives
+*.zip
+*.tar
+*.bz
+*.bz2
+!archives/*.zip
+!archives/*.bz
+!archives/*.bz2
+
+
 develop-eggs/
 dist/
 downloads/
@@ -99,3 +156,22 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# build
+jumanpp-1.02/
+local/
+local_win/
+!boost-1_65_subset.zip
+
+#env
+test/result_*.txt
+.git/
+.vscode/
+.recycle/
+build/
+debug/
+dist/
+dics/
+
+python_module/LICENSES.txt
+custom_build/
