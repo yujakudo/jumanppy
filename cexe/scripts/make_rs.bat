@@ -1,4 +1,5 @@
 echo off
+cd /d %~dp0
 echo «‘‚ğ“WŠJ‚µ‚Ü‚·c
 ..\mkdarts_jumanpp.exe jumanpp.mdic dic
 echo map‚ğì¬‚µ‚Ü‚·c

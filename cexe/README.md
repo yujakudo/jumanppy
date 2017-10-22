@@ -71,7 +71,6 @@ libgcc, libstdc++はtoolchainに含まれますし、libwinpthreadはデフォ�
 MinGWのコンソールにて展開ディレクトリに移動後、以下を順に入力します。  
 ```shell
 cd cexe
-./btc download
 ./btc load
 ./btc build-w64
 ```
