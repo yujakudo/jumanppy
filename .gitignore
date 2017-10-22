@@ -164,7 +164,7 @@ local_win/
 !boost-1_65_subset.zip
 
 #env
-test/result_*.txt
+result_*.txt
 .git/
 .vscode/
 .recycle/

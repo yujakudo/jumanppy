@@ -1,0 +1,74 @@
+prefix=
+
+DICT_DIR=../dict-build
+SCRIPT_DIR=$(DICT_DIR)/scripts
+JUMANPM_DIR=$(DICT_DIR)/scripts/lib/
+MKDARTS=../src/mkdarts_jumanpp
+JUMANPP=../src/jumanpp
+DIST_RS_DIR=share/jumanpp
+
+DICT_DIST = dic.base dic.bin \
+			dic.da dic.form \
+			dic.form_type dic.imis \
+			dic.pos dic.read \
+			dic.rep dic.spos version
+
+MDL_DIST = feature.def freq_words.list \
+			lang.mdl lang.mdl.nnet weight.mdl
+
+DICT_NODIST = lang.mdl.direct lang.mdl.map \
+			lang.mdl.nnet.map weight.mdl.map \
+			dic.base.map dic.form.map \
+			dic.form_type.map dic.imis.map \
+			dic.pos.map dic.read.map \
+			dic.rep.map dic.spos.map
+
+# copy_files <files>
+define install_files
+	if [ "$(prefix)" = "" ]; then \
+		echo "prefix is not set."; exit 1; \
+	fi; \
+	to_dir=$(prefix)/$(DIST_RS_DIR); \
+	mkdir -p $$to_dir; \
+	for file in $1; do \
+		cp $$file $$to_dir; \
+	done;
+endef
+
+.PHONY: all clean install install-mdl
+
+# all: jumanpp
+all: lang.mdl.direct
+
+clean:
+	rm -f lang.mdl.direct;\
+	rm -f *.map; \
+	rm -f dic.*
+
+dic.base: jumanpp.mdic # $(MKDARTS)
+	rm -f dic.*; \
+	$(MKDARTS) jumanpp.mdic dic
+
+lang.mdl.direct: $(MDL_DIST) $(DICT_DIST) #src/jumanpp
+	rm -f lang.mdl.direct;\
+	rm -f *.map;\
+	echo "" | $(JUMANPP) -D .
+
+lang.mdl.map: lang.mdl.direct lang.mdl 
+lang.mdl.nnet.map: lang.mdl.direct lang.mdl.nnet 
+weight.mdl.map: lang.mdl.direct 
+
+dic.base.map: dic.base lang.mdl.direct
+dic.form.map: dic.form lang.mdl.direct
+dic.form_type.map: dic.form_type lang.mdl.direct
+dic.imis.map: dic.imis lang.mdl.direct
+dic.pos.map: dic.pos lang.mdl.direct
+dic.read.map: dic.read lang.mdl.direct
+dic.rep.map: dic.rep lang.mdl.direct
+dic.spos.map: dic.spos lang.mdl.direct
+
+install:
+	$(call install_files, $(MDL_DIST) $(DICT_DIST) $(DICT_NODIST))
+
+install-mdl:
+	$(call install_files, $(MDL_DIST))

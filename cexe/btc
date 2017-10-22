@@ -13,7 +13,7 @@ fi
 JUMANPP_URL=http://lotus.kuee.kyoto-u.ac.jp/nl-resource/jumanpp/jumanpp-1.02.tar.xz
 # Boost C++ Library
 BOOSTLIB_URL=https://dl.bintray.com/boostorg/release/1.65.1/source/boost_1_65_1.zip
-DOWNLOADS="$JUMANPP_URL $BOOSTLIB_URL"
+DOWNLOADS="$JUMANPP_URL"
 
 # Environment
 THIS_DIR=cexe
@@ -28,7 +28,7 @@ TEST_DIR=test
 TEST_EXE=./test.sh
 
 PACKAGE_DIR=${PACKAGE}
-PATCH_FILE=${ARCHIVE_DIR}/ext_${PACKAGE}_01.patch
+PATCH_FILE=${ARCHIVE_DIR}/ext_${PACKAGE}_02.patch
 DIST_NAME=${JUMANPP}_ext
 DIST_DIR=dist
 
@@ -40,7 +40,7 @@ if $IS_WIN; then
 	# For Windows. (MinGW)
 	# PREFIX=
 	LDFLAGS="--static -static-libgcc -static-libstdc++"
-	LIBS="-lwinpthread"
+	LIBS="-lwinpthread -liconv"
 	INCLUDE_DIR=${THIS_ABS}/local_win/include
 	CPPFLAGS="-I${INCLUDE_DIR}"
 else
@@ -60,27 +60,33 @@ function build_all() {
 	if $IS_WIN; then
 		mkdir -p $1
 		rm -rf $1/*
-		echo ./configure --prefix=$1 --bindir=$1 \
+		echo ./configure --prefix=$1 --bindir=$1 --enable-no-dict \
 			LDFLAGS="${LDFLAGS}" LIBS="${LIBS}" CPPFLAGS="$2" \
 			CFLAGS="" CXXFLAGS=""
-		./configure --prefix=$1 --bindir=$1 \
+		./configure --prefix=$1 --bindir=$1 --enable-no-dict \
 			LDFLAGS="${LDFLAGS}" LIBS="${LIBS}" CPPFLAGS="$2" \
 			CFLAGS="" CXXFLAGS=""
-		make clean all
-		# make clean all install
-		# cd lib
-		# make libjuman.so
-		# cd ..
+		make clean all install
 	else
-		echo ./configure --prefix=$1 \
+		echo ./configure --prefix=$1 --enable-no-dict \
 			LDFLAGS="${LDFLAGS}" LIBS="${LIBS}" CPPFLAGS="$2" \
 			CFLAGS="" CXXFLAGS=""
-		./configure --prefix=$1 \
+		./configure --prefix=$1 --enable-no-dict \
 			LDFLAGS="${LDFLAGS}" LIBS="${LIBS}" CPPFLAGS="$2" \
 			CFLAGS="" CXXFLAGS=""
 		make clean all install
 	fi
 	cd ..
+}
+
+# make and install resources
+# @param dist_dir for prefix
+function make_rs() {
+	make -C ${PACKAGE_DIR}/dict-build all
+	make -C ${PACKAGE_DIR}/jumanpp-resource clean all
+	if [ "$1" != "" ]; then
+		make -C ${PACKAGE_DIR}/jumanpp-resource install prefix=$1
+	fi
 }
 
 # Align distribute director for Windows
@@ -92,7 +98,9 @@ function align() {
 		mv share/jumanpp ./dics
 		rm -rf share
 		cp ${curdir}/${PACKAGE_DIR}/jumanpp-manual.pdf .
-		cp ${curdir}/jumanpprc .
+		cp ${curdir}/scripts/jumanpp-i.bat .
+		cp ${curdir}/scripts/copying.win.txt copying.txt
+		cp ${curdir}/scripts/make_rs.bat dics
 		cd $curdir
 	fi
 }
@@ -101,33 +109,7 @@ echo ${JUMANPP}_EXT
 
 for cmd in $*; do
 
-if [ $cmd = "load" ]; then
-	mkdir -p local_win/include
-	unzip ${ARCHIVE_DIR}/boost-1_65_subset.zip -d local_win/include
-	tar xf ${ARCHIVE_DIR}/${ARCHIVE}
-	cd $PACKAGE_DIR
-	patch -p1 < ../${PATCH_FILE}
-	mkdir -p backup/dic
-	mv jumanpp-resource/dic.* backup/dic
-	rm -f ${PACKAGE_DIR}/dict-build/Makefile
-	cp ${ARCHIVE_DIR}/Makefile.dict-build ${PACKAGE_DIR}/dict-build/Makefile
-	cd ..
-
-elif [ $cmd = "build" ]; then
-	build_all $PREFIX "${CPPFLAGS}"
-
-elif [ $cmd = "build-w64" ]; then
-	n_dist=${PREFIX}_win64
-	build_all ${n_dist} "${CPPFLAGS} -m64 -Ofast"
-	align ${n_dist}
-
-elif [ $cmd = "build-w32" ]; then
-	n_dist=${PREFIX}_win32
-	build_all ${n_dist} "${CPPFLAGS} -m32 -Ofast"
-	align ${n_dist}
-
-# For develop
-elif [ $cmd = "download" ]; then
+if [ $cmd = "download" ]; then
 	cd $ARCHIVE_DIR
 	for download in $DOWNLOADS ; do
 #		if [ ! -e basename $download ]; then
@@ -136,22 +118,55 @@ elif [ $cmd = "download" ]; then
 	done
 	cd ..
 
+elif [ $cmd = "load" ]; then
+	mkdir -p local_win/include
+	unzip ${ARCHIVE_DIR}/boost-1_65_subset.zip -d local_win/include
+	tar xf ${ARCHIVE_DIR}/${ARCHIVE}
+	cd $PACKAGE_DIR
+	patch -p1 < ../${PATCH_FILE}
+	mkdir -p backup/dict-build backup/jumanpp-resource
+	mv jumanpp-resource/dic.* backup/jumanpp-resource
+	mv jumanpp-resource/version backup/jumanpp-resource
+	mv dict-build/Makefile backup/dict-build
+	cd ..
+	cp ${ARCHIVE_DIR}/Makefile.dict-build ${PACKAGE_DIR}/dict-build/Makefile
+	cp ${ARCHIVE_DIR}/Makefile.jumanpp-resource ${PACKAGE_DIR}/jumanpp-resource/Makefile
+
+elif [ $cmd = "build" ]; then
+	build_all $PREFIX "${CPPFLAGS}"
+	make_rs $PREFIX
+
+elif [ $cmd = "build-w64" ]; then
+	n_dist=${PREFIX}_win64
+	build_all ${n_dist} "${CPPFLAGS} -m64 -Ofast"
+	make -C ${PACKAGE_DIR}/dict-build all install prefix=${n_dist}
+	make -C ${PACKAGE_DIR}/jumanpp-resource install-mdl prefix=${n_dist}
+	align ${n_dist}
+
+# For develop
+
+elif [ $cmd = "build-dic" ]; then
+	make_rs
+
 elif [ $cmd = "build-debug" ]; then
 	n_dist=${PREFIX}_debug
 	build_all ${n_dist} "${CPPFLAGS} -g -O0"
 	align ${n_dist}
 
 elif [ $cmd = "diff" ]; then
-	diff_opt="-rupBN -x *dic -x perl -x stamp-h1 -x winconf -x jumanrc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile"
-	fromdir=/tmp/${PACKAGE_DIR}/src
-	todir=${PACKAGE_DIR}/src
-	$DIFF ${diff_opt} ${fromdir} ${todir} > ${PATCH_FILE}
+	diff_opt="-rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile"
+	fromdir=/tmp/${PACKAGE_DIR}
+	todir=${PACKAGE_DIR}
+	cp ${todir}/dict-build/Makefile ${ARCHIVE_DIR}/Makefile.dict-build
+	cp ${todir}/jumanpp-resource/Makefile ${ARCHIVE_DIR}/Makefile.jumanpp-resource
+	$DIFF ${diff_opt} ${fromdir}/src ${todir}/src > ${PATCH_FILE}
 
 elif [ $cmd = "test" ]; then
 	if $IS_WIN; then
 		cd $TEST_DIR
-		$TEST_EXE ../dist/juman-7.01_ext_win64/juman.exe
-		$TEST_EXE ../dist/juman-7.01_ext_win32/juman.exe
+#		$TEST_EXE
+		$TEST_EXE ../${DIST_DIR}/${DIST_NAME}_win64/jumanpp.exe
+#		$TEST_EXE ../dist/juman-7.01_ext_win32/juman.exe
 		cd ..
 	else
 		cd $TEST_DIR
@@ -163,24 +178,26 @@ elif [ $cmd = "clean-dist" ]; then
 	rm -rf ${DIST_DIR}/*
 
 elif [ $cmd = "zip" ]; then
-	cp copyings/copying.exe.txt ${DIST_DIR}/${DIST_NAME}_win64/copying.txt
-	cp copyings/copying.exe.txt ${DIST_DIR}/${DIST_NAME}_win32/copying.txt
+	cp scripts/copying.win.txt ${DIST_DIR}/${DIST_NAME}_win64/copying.txt
+#	cp copyings/copying.exe.txt ${DIST_DIR}/${DIST_NAME}_win32/copying.txt
 	cd ${DIST_DIR}
+	rm -f ${DIST_NAME}-${MODULE_VERSION}_win64.zip
 	zip -r ${DIST_NAME}-${MODULE_VERSION}_win64.zip ${DIST_NAME}_win64
-	zip -r ${DIST_NAME}-${MODULE_VERSION}_win32.zip ${DIST_NAME}_win32
+#	zip -r ${DIST_NAME}-${MODULE_VERSION}_win32.zip ${DIST_NAME}_win32
 	cd ..
 
 elif [ $cmd = "git-push" ]; then
 	cd ..
 	git push origin master
-	cd THIS_DIR
+	cd $THIS_DIR
+
 elif [ $cmd = "git-tag" ]; then
 	cd ..
 	echo -n "Comment: "
 	read comm
 	git tag -a $V_VERSION -m "${comm}"
 	git push origin $V_VERSION
-	cd THIS_DIR
+	cd $THIS_DIR
 
 else
 	echo "Unknown command:" $cmd

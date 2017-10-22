@@ -1,50 +1,66 @@
+prefix=
 
 SCRIPT_DIR=scripts
 JUMANPM_DIR=scripts/lib/
-# JUMANPP_DIC_DIR=jumanpp_dic
 JUMANPP_DIC_DIR=../jumanpp-resource
-MKDARTS_JUMANPP=../src/mkdarts_jumanpp
-JUMANPP_MDIC=jumanpp.mdic
-DEST=$(JUMANPP_DIC_DIR)/dic.bin
+JUMANPP_MDIC=$(JUMANPP_DIC_DIR)/jumanpp.mdic
+VERSION=$(JUMANPP_DIC_DIR)/version
 
 DIC_DIRS=dic wikipediadic wiktionarydic webdic onomatopedic userdic
 MDIC_LIST=$(addsuffix .mdic,$(DIC_DIRS))
 BASIC_DICTS=$(shell find dic -name "*.dic"|grep -v "Rengo.dic"|grep -v "ContentW.dic")
 
+# change timestamp to the last of dependents.
+define timestamp
+	timestamp=0; \
+	for file in $1; do \
+		ts=`stat -c %Y $$file`; \
+		if test $$timestamp -lt $$ts; then \
+			timestamp=$$ts; \
+			ref=$$file; \
+		fi; \
+	done; \
+	touch -r $$ref $@
+endef
+
 .PHONY: jumanpp all clean install
 
-install:
-
 # all: jumanpp
-all: $(DEST)
+all: $(JUMANPP_MDIC)
 
 clean:
-	rm -f $(JUMANPP_MDIC) $(JUMANPP_DIC_DIR)/dic.*
+	rm -f *.mdic.org; \
+	rm -f *.mdic; \
+	rm -f $(JUMANPP_MDIC)
 
 scripts/lib/Grammar.pm: grammar/JUMAN.katuyou grammar/JUMAN.grammar grammar/JUMAN.kankei
 	rm -f scripts/lib/Grammar.pm
 	perl -I scripts/lib/ scripts/mkgrammarpm grammar -o scripts/lib/Grammar.pm 
 
-jumanpp: $(MDIC_LIST) scripts/lib/Grammar.pm
-	mkdir -p jumanpp_dic &&\
-	cat $(MDIC_LIST) | perl -I$(SCRIPT_DIR) -I$(JUMANPM_DIR) $(SCRIPT_DIR)/jumandic2morphdic.perl --nominalize --okurigana > jumanpp.mdic &&\
-	mkdarts_jumanpp jumanpp.mdic jumanpp_dic/dic &&\
-	date +%Y-%m-%d-%h-%m-%s > jumanpp_dic/version
-
-$(DEST): $(JUMANPP_MDIC) scripts/lib/Grammar.pm # $(MKDARTS_JUMANPP)
-	$(MKDARTS_JUMANPP) $(JUMANPP_MDIC) $(JUMANPP_DIC_DIR)/dic
-
 $(JUMANPP_MDIC): $(MDIC_LIST) scripts/lib/Grammar.pm
 	mkdir -p $(JUMANPP_DIC_DIR) &&\
-	cat $(MDIC_LIST) | perl -I$(SCRIPT_DIR) -I$(JUMANPM_DIR) $(SCRIPT_DIR)/jumandic2morphdic.perl --nominalize --okurigana > $@
+	cat $(MDIC_LIST) | perl -I$(SCRIPT_DIR) -I$(JUMANPM_DIR) $(SCRIPT_DIR)/jumandic2morphdic.perl --nominalize --okurigana > $@; \
+	$(call timestamp, $(MDIC_LIST)); \
+	stat -c %y $@ > $(VERSION); \
+	touch $@
 
 %.mdic: %
-	cat $</*.dic > $@
+	cat $</*.dic > $@; \
+	$(call timestamp, $(wildcard $</*.dic))
 
-wikipediadic.mdic: wikipediadic wikipediadic/wikipedia.dic.orig 
-	cat wikipediadic/wikipedia.dic.orig > $@
+wikipediadic.mdic: wikipediadic/wikipedia.dic.orig 
+	cat $^ > $@; \
+	$(call timestamp, $^)
 
 dic.mdic: $(BASIC_DICTS) dic/ContentW.marked_dic 
-	cat $^ > dic.mdic
+	cat $^ > dic.mdic; \
+	$(call timestamp, $^)
 
-
+install:
+	if [ "$$prefix" = "" ]; then \
+		echo "prefix is not set."; exit 1; \
+	fi; \
+	dist=$(prefix)/share/jumanpp; \
+	mkdir -p $$dist; \
+	cp $(JUMANPP_MDIC) $$dist; \
+	cp $(VERSION) $$dist;

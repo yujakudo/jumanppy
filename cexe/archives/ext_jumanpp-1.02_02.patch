@@ -1,0 +1,1815 @@
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/common.h jumanpp-1.02/src/common.h
+--- B:/msys64/tmp/jumanpp-1.02/src/common.h	Mon Oct  3 13:51:08 2016
++++ jumanpp-1.02/src/common.h	Fri Oct 20 18:02:26 2017
+@@ -27,6 +27,11 @@
+ #include <string.h>
+ #include <float.h>
+ #include "u8string.h"
++#include <boost/exception/exception.hpp>
++
++#if defined(_WIN32) && !defined(__CYGWIN__)
++#include <windows.h>
++#endif
+ 
+ typedef std::unordered_map<std::string, double> Umap;
+ 
+@@ -69,6 +74,8 @@ check_exceptional_chars_in_figure(const 
+ 
+ extern size_t is_suuji(unsigned char *ucp);
+ 
++extern void BoostExceptionProc(void);
++
+ #ifndef INT_MAX
+ #define INT_MAX 2147483647
+ #endif
+@@ -154,6 +161,8 @@ extern size_t is_suuji(unsigned char *uc
+ #define EXCEPTIONAL_FIGURE_EXPRESSION_LENGTH 6
+ #define EXCEPTIONAL_FIGURE_EXPRESSION_LENGTH_2 9
+ 
++#define MEGABYTE (1024 * 1024)
++
+ // split function with split_num
+ template <class T>
+ inline int split_string(const std::string &src, const std::string &key,
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/darts.h jumanpp-1.02/src/darts.h
+--- B:/msys64/tmp/jumanpp-1.02/src/darts.h	Fri Mar 25 12:41:54 2016
++++ jumanpp-1.02/src/darts.h	Fri Oct 20 08:49:03 2017
+@@ -502,8 +502,8 @@ namespace Darts {
+ #endif
+ 
+ #if 4 == 8 && !defined(DARTS_ARRAY_SIZE_IS_DEFINED)
+-  typedef Darts::DoubleArrayImpl<char, unsigned char, long,
+-                                 unsigned long> DoubleArray;
++  typedef Darts::DoubleArrayImpl<char, unsigned char, int64_t,
++                                 uint64_t> DoubleArray;
+ #define DARTS_ARRAY_SIZE_IS_DEFINED 1
+ #endif
+ 
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/dic.cc jumanpp-1.02/src/dic.cc
+--- B:/msys64/tmp/jumanpp-1.02/src/dic.cc	Mon Dec 26 13:33:05 2016
++++ jumanpp-1.02/src/dic.cc	Fri Oct 20 16:30:06 2017
+@@ -3,7 +3,7 @@
+ #include "dic.h"
+ 
+ namespace Morph {
+-unsigned long Dic::MORPH_DUMMY_POS;
++uint64_t Dic::MORPH_DUMMY_POS;
+ 
+ Dic::~Dic() { //{{{
+     MMAP_CLOSE(char, dmmap);
+@@ -205,7 +205,7 @@ Node *Dic::lookup_lattice(
+ Node *Dic::lookup_lattice(
+     std::vector<CharLattice::da_result_pair_type> &da_search_result,
+     const char *start_str, unsigned int specified_length,
+-    unsigned long specified_posid) { //{{{
++    uint64_t specified_posid) { //{{{
+     Node *result_node = NULL;
+ 
+     std::vector<CharLattice::da_result_pair_type> &result_pair =
+@@ -331,14 +331,14 @@ Node *Dic::lookup_lattice_specified(
+     const std::vector<std::string> &specified) { //{{{
+     Node *result_node = NULL;
+ 
+-    unsigned long specified_readingid =
++    uint64_t specified_readingid =
+         readingid2reading.register_pos(specified[0]);
+-    unsigned long specified_baseid = baseid2base.register_pos(specified[1]);
+-    unsigned long specified_posid = posid2pos.register_pos(specified[2]);
+-    unsigned long specified_sposid = sposid2spos.register_pos(specified[3]);
+-    unsigned long specified_formtypeid =
++    uint64_t specified_baseid = baseid2base.register_pos(specified[1]);
++    uint64_t specified_posid = posid2pos.register_pos(specified[2]);
++    uint64_t specified_sposid = sposid2spos.register_pos(specified[3]);
++    uint64_t specified_formtypeid =
+         formtypeid2formtype.register_pos(specified[4]);
+-    unsigned long specified_formid = formid2form.register_pos(specified[5]);
++    uint64_t specified_formid = formid2form.register_pos(specified[5]);
+ 
+     std::vector<CharLattice::da_result_pair_type> &result_pair =
+         da_search_result;
+@@ -441,7 +441,7 @@ Node *Dic::lookup_lattice_specified(
+ // 未定義語のノードを生成(ある品詞の候補についてのノード or
+ // 未定のままのノード(こちらはどういうタイミングで呼び出されるのか？) )
+ Node *Dic::make_unk_pseudo_node(const char *start_str, int byte_len,
+-                                unsigned long specified_posid) { //{{{
++                                uint64_t specified_posid) { //{{{
+     Node *new_node = new Node;
+     new_node->surface = start_str;
+     new_node->length = byte_len;
+@@ -549,9 +549,9 @@ Node *Dic::make_unk_pseudo_node(const ch
+ // 部分アノテーション用の最大長を設定
+ Node *Dic::make_specified_pseudo_node_by_dic_check(
+     const char *start_str, unsigned int specified_length,
+-    std::string *specified_pos, std::vector<unsigned long> *specified_unk_pos,
++    std::string *specified_pos, std::vector<uint64_t> *specified_unk_pos,
+     unsigned int type_family, Node *r_node, unsigned int max_length) { //{{{
+-    unsigned long specified_posid = MORPH_DUMMY_POS;
++    uint64_t specified_posid = MORPH_DUMMY_POS;
+     if (specified_pos)
+         specified_posid = posid2pos.get_id(*specified_pos);
+ 
+@@ -667,12 +667,12 @@ Node *Dic::make_specified_pseudo_node_by
+ // 作ってr_node に足すことはしない
+ // 何も作られなかった場合は nullptr を返す
+ Node *Dic::make_unk_pseudo_node_list_some_pos_by_dic_check(
+-    const char *start_str, int byte_len, unsigned long specified_posid,
+-    std::vector<unsigned long> *specified_unk_pos, Node *r_node) { //{{{
++    const char *start_str, int byte_len, uint64_t specified_posid,
++    std::vector<uint64_t> *specified_unk_pos, Node *r_node) { //{{{
+     Node *result_node = nullptr;
+     if (specified_posid == MORPH_DUMMY_POS) {
+         // result_node = r_node; // こうするべきか，しないべきか??
+-        for (std::vector<unsigned long>::iterator it =
++        for (std::vector<uint64_t>::iterator it =
+                  specified_unk_pos->begin();
+              it != specified_unk_pos->end(); it++) {
+             Node *new_node = make_unk_pseudo_node(start_str, byte_len, *it);
+@@ -719,14 +719,14 @@ Node *Dic::make_unk_pseudo_node_list_som
+ // では未定義語としてノードを作る際に品詞候補についてそれぞれノードを生成する
+ // ほぼNode 作るだけ( 品詞が指定されていれば、その品詞、UNKなら候補すべて)
+ Node *Dic::make_unk_pseudo_node_list_some_pos(
+-    const char *start_str, int byte_len, unsigned long specified_posid,
+-    std::vector<unsigned long> *specified_unk_pos) { //{{{
++    const char *start_str, int byte_len, uint64_t specified_posid,
++    std::vector<uint64_t> *specified_unk_pos) { //{{{
+     Node *result_node = NULL;
+ 
+     if (specified_posid == MORPH_DUMMY_POS) {
+         // POSが分からない場合(テスト時)
+         // 未知語の候補POSすべてを生成
+-        for (std::vector<unsigned long>::iterator it =
++        for (std::vector<uint64_t>::iterator it =
+                  specified_unk_pos->begin();
+              it != specified_unk_pos->end(); it++) {
+             Node *new_node = make_unk_pseudo_node(start_str, byte_len, *it);
+@@ -751,7 +751,7 @@ Node *Dic::make_unk_pseudo_node_list_som
+ Node *Dic::make_pseudo_node_list_in_range(const char *start_str,
+                                           unsigned int min_char_num,
+                                           unsigned int max_char_num,
+-                                          unsigned long specified_posid) { //{{{
++                                          uint64_t specified_posid) { //{{{
+     Node *result_node = NULL;
+     unsigned int length = strlen(start_str), char_num = 1;
+     unsigned long code = 0;
+@@ -805,7 +805,7 @@ Node *Dic::make_pseudo_node_list_in_rang
+ // あとでオプションに変更する
+ Node *Dic::make_unk_pseudo_node_gold(const char *start_str, int byte_len,
+                                      std::string &specified_pos) { //{{{
+-    unsigned long specified_posid = posid2pos.get_id(specified_pos);
++    uint64_t specified_posid = posid2pos.get_id(specified_pos);
+ 
+     Node *new_node = new Node;
+     new_node->surface = start_str;
+@@ -883,7 +883,7 @@ Node *Dic::make_unk_pseudo_node_gold(con
+ 
+ Node *Dic::make_pseudo_node_gold(const char *start_str, int byte_len,
+                                  const std::vector<std::string> &spec) { //{{{
+-    unsigned long specified_posid = posid2pos.register_pos(spec[2]);
++    uint64_t specified_posid = posid2pos.register_pos(spec[2]);
+ 
+     Node *new_node = new Node;
+     new_node->surface = start_str;
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/dic.h jumanpp-1.02/src/dic.h
+--- B:/msys64/tmp/jumanpp-1.02/src/dic.h	Fri Sep 30 10:01:00 2016
++++ jumanpp-1.02/src/dic.h	Fri Oct 20 16:27:00 2017
+@@ -33,7 +33,7 @@ class Dic {
+     static constexpr const char *DEF_ONOMATOPOEIA_IMIS =
+         "自動認識 スル接続可能";
+     static constexpr const char *DEF_MORPH_DUMMY = "DUMMY POS";
+-    static unsigned long MORPH_DUMMY_POS;
++    static uint64_t MORPH_DUMMY_POS;
+ 
+   public:
+     static const std::unordered_map<std::string, int> pos_map;
+@@ -95,7 +95,7 @@ class Dic {
+     Node *lookup_lattice(
+         std::vector<CharLattice::da_result_pair_type> &da_search_result,
+         const char *start_str, unsigned int specified_length,
+-        unsigned long specified_posid);
++        uint64_t specified_posid);
+     Node *lookup_lattice_specified(
+         std::vector<CharLattice::da_result_pair_type> &da_search_result,
+         const char *start_str, unsigned int specified_length,
+@@ -107,7 +107,7 @@ class Dic {
+     Node *make_unk_pseudo_node(const char *start_str, int byte_len,
+                                const std::string &specified_pos);
+     Node *make_unk_pseudo_node(const char *start_str, int byte_len,
+-                               unsigned long specified_posid);
++                                uint64_t specified_posid);
+ 
+     // 暫定。あとでオプションとして統合する
+     Node *make_unk_pseudo_node_gold(const char *start_str, int byte_len,
+@@ -116,11 +116,11 @@ class Dic {
+                                 const std::vector<std::string> &spec);
+ 
+     Node *make_unk_pseudo_node_list_some_pos(
+-        const char *start_str, int byte_len, unsigned long specified_posid,
+-        std::vector<unsigned long> *specified_unk_pos);
++        const char *start_str, int byte_len, uint64_t specified_posid,
++        std::vector<uint64_t> *specified_unk_pos);
+     Node *make_unk_pseudo_node_list_some_pos_by_dic_check(
+-        const char *start_str, int byte_len, unsigned long specified_posid,
+-        std::vector<unsigned long> *specified_unk_pos, Node *r_node);
++        const char *start_str, int byte_len, uint64_t specified_posid,
++        std::vector<uint64_t> *specified_unk_pos, Node *r_node);
+ 
+     // Node *make_unk_pseudo_node_list(const char *start_str, unsigned int
+     // min_char_num, unsigned int max_char_num);
+@@ -128,20 +128,20 @@ class Dic {
+     Node *
+     make_unk_pseudo_node_list(const char *start_str, unsigned int min_char_num,
+                               unsigned int max_char_num,
+-                              unsigned long specified_posid = MORPH_DUMMY_POS);
++                              uint64_t specified_posid = MORPH_DUMMY_POS);
+     Node *make_pseudo_node_list_in_range(
+         const char *start_str, unsigned int min_char_num,
+         unsigned int max_char_num,
+-        unsigned long specified_posid = MORPH_DUMMY_POS);
++        uint64_t specified_posid = MORPH_DUMMY_POS);
+ 
+     Node *make_specified_pseudo_node_by_dic_check(
+         const char *start_str, unsigned int specified_length,
+         std::string *inspecified_pos,
+-        std::vector<unsigned long> *specified_unk_pos, unsigned int type_family,
++        std::vector<uint64_t> *specified_unk_pos, unsigned int type_family,
+         Node *r_node = nullptr, unsigned int max_length = 0);
+     // Node* make_specified_pseudo_node_by_dic_check(const char *start_str,
+     // unsigned int specified_length, std::string *specified_pos,
+-    // std::vector<unsigned long> *specified_unk_pos, unsigned int type_family,
++    // std::vector<uint64_t> *specified_unk_pos, unsigned int type_family,
+     // Node* r_node);
+ 
+     // result_pair_type は 上位24 bit が DA 上の位置を示す
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/encoder.cc jumanpp-1.02/src/encoder.cc
+--- B:/msys64/tmp/jumanpp-1.02/src/encoder.cc	Thu Jan  1 00:00:00 1970
++++ jumanpp-1.02/src/encoder.cc	Tue Oct 17 08:45:38 2017
+@@ -0,0 +1,235 @@
++#include <stdlib.h>
++#include <stdarg.h>
++#include <string.h>
++#include "encoder.h"
++
++#define DEF_BUFF_SIZE	(4096)
++#define IS_EMPTY_STR(p)	((p)==NULL || *(p)==0)
++
++//	Encoder::EncStream
++
++Encoder::EncStream::EncStream() {
++	ic = IC_FALSE;
++	size = 0;
++	buff[0] = buff[1] = NULL;
++	b_alloced[0] = b_alloced[1] = false;
++}
++
++Encoder::EncStream::~EncStream() {
++	free_buff();
++}
++	
++bool Encoder::EncStream::set_param(const char * const * pencodings, size_t buff_size, char ** pbuffs) {
++	if( pencodings[0][0]==0 || pencodings[1][0]==0
++		|| 0==strcasecmp(pencodings[0], pencodings[1])) {
++
++		//	No needs to convert. both buffers are same.
++		if(NULL==pbuffs[0] && NULL==pbuffs[1]) {
++			if(!alloc_buff(0)) return false;
++			buff[1] = buff[0];
++		} else if(NULL==pbuffs[1]) {
++			buff[0] = buff[1] = pbuffs[0];
++		} else {
++			buff[0] = buff[1] = pbuffs[1];
++		}
++		return true;
++	}
++	//	open iconv
++	ic = iconv_open(pencodings[1], pencodings[0]);
++	if(IC_FALSE==ic) {
++		fprintf(stderr, "Encoding name(%s or %s) is not avairable.\n", pencodings[0],  pencodings[1]);
++		return false;
++	}
++	//	allocate buffer
++	size = buff_size;
++	for(int i=0; i<2; i++) {
++		buff[i] = pbuffs[i];
++		if(!alloc_buff(i)) return false;
++	}
++	return true;
++}
++
++bool Encoder::EncStream::alloc_buff(int idx) {
++	if(NULL==buff[idx]) {
++		if(NULL==(buff[idx] = new char[size])) {
++			fprintf(stderr, "Fail to allocate buffer in encoder.\n");
++			return false;
++		}
++		b_alloced[idx] = true;
++	}
++	return true;
++}
++
++void Encoder::EncStream::free_buff() {
++	if(IC_FALSE != ic)	{
++		iconv_close(ic);
++		ic = IC_FALSE;
++	}
++	for(int i=0; i<2; i++) {
++		if(b_alloced[i]) {
++			delete[] buff[i];
++			b_alloced[i] = false;
++		}
++	}
++}
++
++bool Encoder::EncStream::convert(std::string &str) {
++	size_t in_size = str.length();
++	size_t out_size = (in_size + 1) * 4;
++	char * outbuff = buff[1];
++	if( out_size > size ) {
++		if(NULL==(outbuff = new char[out_size])) return false;
++	}
++	if(!call_iconv((char *)str.c_str(), in_size, outbuff, out_size)) return false;
++	str = outbuff;
++	if( out_size > size ) delete[] outbuff;
++	return true;
++};
++
++
++//	Encoder
++
++///	Constructor
++Encoder::Encoder( char * buff_input_write, size_t size_input, char * buff_output_read, size_t size_output) {
++	//	temporaly store
++	in.buff[1] = buff_input_write;
++	in.size = size_input;
++	out.buff[0] = buff_output_read;
++	out.size = size_output;
++}
++
++///	Constructor
++Encoder::Encoder() {
++	in.buff[1] = NULL;
++	in.size = DEF_BUFF_SIZE;
++	out.buff[0] = NULL;
++	out.size = DEF_BUFF_SIZE;
++}
++
++///	Destructor
++Encoder::~Encoder() {}
++
++///	Set encodings
++bool Encoder::set_encoding(const char * s_inner, const char * s_inout) {
++	if(IS_EMPTY_STR(s_inner))	s_inner = "UTF-8";
++	char s_io[NAME_LEN*2];
++	s_io[0] = 0;
++	if(!IS_EMPTY_STR(s_inout)) strncpy(s_io, s_inout, sizeof(s_io));
++	s_io[sizeof(s_io)-1] = 0;
++	//	split s_inout
++	char * s_incode = s_io;
++	char * s_outcode = s_io;
++	while(*s_outcode!=0 && *s_outcode!=',') s_outcode++;
++	if(*s_outcode==',') *s_outcode++ = 0;		
++	else s_outcode = s_incode;
++	//	set input stream
++	const char * encodings[2];
++	char * buffers[2];
++	encodings[0] = s_incode;
++	buffers[0] = NULL;
++	encodings[1] = s_inner;
++	buffers[1] = in.buff[1];
++	if(!in.set_param(encodings, in.size, buffers)) return false;
++	//	set output stream
++	encodings[0] = s_inner;
++	buffers[0] = out.buff[0];
++	encodings[1] = s_outcode;
++	buffers[1] = NULL;
++	if(!out.set_param(encodings, out.size, buffers)) return false;
++	return true;
++}
++
++///	Get input buffer to write.
++char * Encoder::getbuff(int direction, int port, size_t *psize) {
++	EncStream *pstream = direction? &out: &in;
++	*psize = pstream->size;
++	return pstream->buff[port];
++}
++
++/// Fail to convert.
++bool Encoder::fail_convert(int direction, const char * str) {
++	const char * s_direc = direction? "output": "input";
++	fprintf(stderr, "Fail to convert %s encoding.(%s)\n", s_direc, str);
++	return false;
++}
++
++/// printf with coverting.
++bool Encoder::_printf(FILE * stream, const char * format, ...) {
++	va_list va;
++	va_start(va, format);
++	bool result = _vprintf(stream, format, va);
++	va_end(va);
++	return result;
++}
++
++/// vprintf with coverting.
++bool Encoder::_vprintf(FILE * stream, const char * format, va_list va) {
++	if(stream==stderr || IC_FALSE==out.ic) {
++		vfprintf(stream, format, va);
++		return true;
++	}
++	EncStream *pstream = &out;
++	int result = vsnprintf(pstream->buff[0], pstream->size, format, va);
++	if(result<0 || pstream->size <= (unsigned int)result) {
++		fprintf(stderr, "Fail to fill format in encoder_printf.(%s)\n", format);
++		return false;
++	}
++	if(false==pstream->convert()) {
++		fprintf(stderr, "Fail to convert encoding in encoder_printf.(%s)\n", pstream->buff[0]);
++		return false;
++	}
++	fprintf(stream, pstream->buff[1]);
++	return true;
++}
++
++//	EncodeProc
++
++EncodeProc::EncodeProc(	const char * s_inner, const char * s_inout,
++						const char * s_ifile, const char * s_ofile) {
++	if(!IS_EMPTY_STR(s_ifile)) {
++		i_stream.open(s_ifile);
++		if(!i_stream.is_open()) {
++			fprintf(stderr, "Fail to open file.(%s)\n", s_ifile);
++			return;
++		}
++		p_stdin = &(i_stream);
++	}
++	if(!encoder.set_encoding(s_inner, s_inout)) return;
++	if(!encoder.needs(Encoder::ENC_OUT) && IS_EMPTY_STR(s_ofile)) {
++		ready = true;
++		return;
++	}
++	if(!IS_EMPTY_STR(s_ofile)) {
++		o_stream.open(s_ofile, std::ofstream::binary|std::ofstream::out);
++		if(!o_stream.is_open()) {
++			fprintf(stderr, "Fail to create file.(%s)\n", s_ofile);
++			return;
++		}
++		if(!encoder.needs(Encoder::ENC_OUT)) {
++			p_stdout = &(o_stream);
++			ready = true;
++			return;
++		}
++		p_out_stream = &(o_stream);
++	}
++	p_stdout = &(s_stream);
++	ready = true;
++}
++
++EncodeProc::~EncodeProc() {
++	flush();
++	if(i_stream.is_open()) i_stream.close();
++	if(o_stream.is_open()) o_stream.close();
++}
++
++///	Get stdout stream.
++std::ostream * EncodeProc::get_stdout() {
++	if(!ready) return NULL;
++	return p_stdout;
++}
++
++///	Get stdin stream.
++std::istream * EncodeProc::get_stdin() {
++	if(!ready) return NULL;
++	return p_stdin;
++}
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/encoder.h jumanpp-1.02/src/encoder.h
+--- B:/msys64/tmp/jumanpp-1.02/src/encoder.h	Thu Jan  1 00:00:00 1970
++++ jumanpp-1.02/src/encoder.h	Sat Oct 21 15:12:55 2017
+@@ -0,0 +1,202 @@
++#ifndef ENCODER_H
++#define ENCODER_H
++
++#include <iconv.h>
++#include <string>
++#include <iostream>
++#include <fstream>
++#include <sstream>
++
++#define IC_FALSE	((iconv_t)-1)
++
++/// Class Encoder
++class Encoder {
++public:
++	//	Length of encoding name;
++	static const int NAME_LEN	 = 22;
++	//	Direction of stream
++	static const int ENC_IN  = 0;
++	static const int ENC_OUT  = 1;
++	//	Port of stream
++	static const int WRITE = 0;
++	static const int READ = 1;
++
++protected:
++	/// Class Encoder::EncStream
++	class EncStream {
++	public:
++		iconv_t ic;			///	iconv descripter
++		char *	buff[2];	///	buffers.
++		bool b_alloced[2];	///	buff is allocated
++		size_t	size;		///	buffer size
++		EncStream();
++		~EncStream();
++		bool set_param(const char * const * pencodings, size_t buff_size, char ** pbuffs);
++		bool alloc_buff(int idx);
++		void free_buff();
++
++		inline bool call_iconv(char *inbuf, size_t inbuf_size, char *outbuf, size_t outbuf_size) {
++			if(0==inbuf_size) inbuf_size = strlen(inbuf);
++			outbuf_size--;
++			size_t result = iconv(ic, &inbuf, &inbuf_size, &outbuf, &outbuf_size );
++			*outbuf = 0;
++			return ((size_t)-1 == result)? false: true;
++		}
++
++		inline bool convert() {
++			return call_iconv(buff[0], 0, buff[1], size);
++		};
++		
++		bool convert(std::string &str);
++
++		inline bool convert(const char * buffer) {
++			return call_iconv((char *)buffer, 0, buff[1], size);
++		};
++	};
++
++	EncStream	in;
++	EncStream	out;
++
++public:
++
++	///	Constructor
++	///	@param buff_input_write Default buffer to write input. if NULL, newly allocates.
++	/// @param size_input Size of buffer for input.
++	///	@param buff_output_read Default buffer to read output. if NULL, newly allocates.
++	/// @param size_output Size of buffer for output.
++	Encoder( char * buff_input_write, size_t size_input, char * buff_output_read, size_t size_output);
++	
++	///	Constructor
++	Encoder();
++
++	///	Destructor
++	~Encoder();
++
++	///	Set encodings
++	/// @param s_inner Name of inner encoding. If NULL or null string, set to UTF-8
++	/// @param s_inout Comma separated string of input and output encoding.
++	///	If comma does not exist, both input and output encoding considered this value.
++	///	If NULL or null string, considered same as inner encoding and will not do encoding.
++	/// @return Success or fail
++	bool set_encoding(const char * s_inner, const char * s_inout);
++
++	/// Check needs to convert.
++	/// @param direction. Encoder::ENC_IN or Encoder::ENC_OUT
++	/// @return true if needs conversion, or false.
++	inline bool needs(int direction) {
++		return ((direction? out: in).ic==IC_FALSE)? false: true;
++	};
++
++	///	Get input buffer to write.
++	/// @param direction. Stream direction. Encoder::ENC_IN(0) or Encoder::ENC_OUT(1)
++	/// @param port. Port of stream. Encoder::WRITE(0) or Encoder::READ(1)
++	///	@param psize [out]Pointer to write buffer size.
++	/// @return buffer pointer.
++	char * getbuff(int direction, int port, size_t *psize);
++
++	/// Conver encoding.
++	/// @param direction. Stream direction. Encoder::ENC_IN(0) or Encoder::ENC_OUT(1)
++	/// @return Success or fail
++	inline bool convert(int direction) {
++		EncStream *pstream = direction? &out: &in;
++		if(pstream->ic==IC_FALSE) return true;	//	Nothing to do.
++		if(false==pstream->convert()) return fail_convert(direction, pstream->buff[0]);
++		return true;
++	};
++
++	/// Conver encoding.
++	/// @param direction. Stream direction. Encoder::ENC_IN(0) or Encoder::ENC_OUT(1)
++	/// @param str. [in,out]String to convert.
++	/// @return Success or fail
++	inline bool convert(int direction, std::string &str) {
++		EncStream *pstream = direction? &out: &in;
++		if(pstream->ic==IC_FALSE) return true;	//	Nothing to do.
++		if(false==pstream->convert(str)) return fail_convert(direction, str.c_str());
++		return true;
++	};
++
++	inline bool output(std::ostream &ostrm, const std::string &str) {
++		if(out.ic==IC_FALSE) {
++			ostrm << str;
++			return true;
++		}
++		if(false==out.convert(str.c_str())) return fail_convert(Encoder::ENC_OUT, str.c_str());
++		ostrm << out.buff[1];
++		return true;
++	};
++	
++	/// printf with coverting.
++	///	@param stream stream to output.
++	/// @param format Format will be filled with following arguments.
++	/// @return Success or fail
++	bool _printf(FILE * stream, const char * format, ...);
++
++	/// vprintf with coverting.
++	///	@param stream stream to output.
++	/// @param format Format.
++	/// @param va Argumets to fill format with.
++	/// @return Success or fail
++	bool _vprintf(FILE * stream, const char * format, va_list va);
++
++protected:
++	bool fail_convert(int direction, const char * str);
++};
++
++///	Class EncodeProc
++///	Rewrite global P_STDOUT and execute conversion and output to a file.
++class EncodeProc {
++protected:
++	Encoder encoder;
++	std::ofstream o_stream;
++	std::stringstream s_stream;
++	std::ostream * p_out_stream = &(std::cout);
++	std::ostream * p_stdout = &(std::cout);
++	std::ifstream i_stream;
++	std::istream * p_stdin = &(std::cin);
++public:
++	bool ready = false;
++
++	///	Constructor
++	/// @param s_inner Name of inner encoding. If NULL or null string, set to UTF-8
++	/// @param s_inout Comma separated string of input and output encoding.
++	///	If comma does not exist, both input and output encoding considered this value.
++	///	If NULL or null string, considered same as inner encoding and will not do encoding.
++	///	@param s_ifile Path to inputfile. If NULL or null string, inputs from stdin.
++	///	@param s_ofile Path to outputfile. If NULL or null string, outputs to stdout.
++	EncodeProc(	const char * s_inner=NULL, const char * s_inout=NULL,
++				const char * s_ifile=NULL, const char * s_ofile=NULL);
++
++	///	Destructor
++	~EncodeProc();
++
++	///	Get stdout stream.
++	///	may return stringstream or filestream.
++	///	@return stream to output, or NULL if fail to construct.
++	std::ostream * get_stdout();
++
++	///	Get stdin stream.
++	///	may return filestream.
++	///	@return stream to input, or NULL if fail to construct.
++	std::istream * get_stdin();
++	
++	///	Convert input string.
++	inline bool convert(std::string &str) {
++		return encoder.convert(Encoder::ENC_IN, str);
++	}
++
++	///	Flush output.
++	inline bool flush() {
++		if(!encoder.needs(Encoder::ENC_OUT)) return true;
++		std::string s;
++		bool result = true;
++		while(std::getline(s_stream, s)) {
++			s += "\n";
++			bool result = encoder.output(*(p_out_stream), s.c_str()) && result;
++		}
++		s_stream.str("");
++		s_stream.clear(std::stringstream::goodbit);
++		return result;
++	}
++};
++
++#endif	//	ENCODER_H
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/feature.cc jumanpp-1.02/src/feature.cc
+--- B:/msys64/tmp/jumanpp-1.02/src/feature.cc	Mon Oct  3 13:50:43 2016
++++ jumanpp-1.02/src/feature.cc	Fri Oct 20 13:39:28 2017
+@@ -19,7 +19,7 @@ std::unordered_set<
+     std::tuple<std::string, std::string, std::string, std::string>, tuple_hash,
+     tuple_equal> FeatureSet::freq_word_set;
+ 
+-std::unordered_map<long int, std::string> FeatureSet::feature_map;
++std::unordered_map<uint64_t, std::string> FeatureSet::feature_map;
+ 
+ FeatureSet::FeatureSet(FeatureTemplateSet *in_ftmpl) { //{{{
+     ftmpl = in_ftmpl;
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/feature.h jumanpp-1.02/src/feature.h
+--- B:/msys64/tmp/jumanpp-1.02/src/feature.h	Tue Oct  4 18:28:45 2016
++++ jumanpp-1.02/src/feature.h	Fri Oct 20 13:43:31 2017
+@@ -249,7 +249,7 @@ class FeatureSet { //{{{
+     FeatureVector *weight; // 廃止
+ 
+   private:
+-    static std::unordered_map<long int, std::string>
++    static std::unordered_map<uint64_t, std::string>
+         feature_map; // sub_feature_map
+     static bool debug_flag;
+     static bool use_total_sim;
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/feature_vector.cc jumanpp-1.02/src/feature_vector.cc
+--- B:/msys64/tmp/jumanpp-1.02/src/feature_vector.cc	Thu Aug 25 13:55:19 2016
++++ jumanpp-1.02/src/feature_vector.cc	Fri Oct 20 12:45:29 2017
+@@ -1,8 +1,14 @@
+ #include "feature_vector.h"
+ 
++#define MEGABYTE (1024 * 1024)
++//  Initial map size in MByte when create.
++#define INITIAL_WEIGHT_SIZE_MB (200 * MEGABYTE)
++//  #define INITIAL_WEIGHT_SIZE_MB (1024 * MEGABYTE)    //  Original
++
++
+ // 差分から新しいFeatureVectorオブジェクトを生成
+-FeatureVector::FeatureVector(const std::vector<unsigned long> &v1,
+-                             const std::vector<unsigned long> &v2) { /*{{{*/
++FeatureVector::FeatureVector(const std::vector<Ulkey> &v1,
++                             const std::vector<Ulkey> &v2) { /*{{{*/
+     for (const auto &s : v1) {
+         vec[s] += 1.0;
+     }
+@@ -12,7 +18,7 @@ FeatureVector::FeatureVector(const std::
+ }; /*}}}*/
+ 
+ // (素性のインデックスのみを受け取る)
+-FeatureVector::FeatureVector(const std::vector<unsigned long> &v1) { /*{{{*/
++FeatureVector::FeatureVector(const std::vector<Ulkey> &v1) { /*{{{*/
+     for (const auto &s : v1) {
+         vec[s] += 1.0;
+     }
+@@ -30,6 +36,22 @@ FeatureVector::FeatureVector(const Featu
+     }
+ }; /*}}}*/
+ 
++bool FeatureVector::create_mmap(std::string mapfile) { //{{{
++    mmap_flag = true;
++
++    //  INITIAL_WEIGHT_SIZE_MB is defined at top of this file.
++    unsigned long long map_weight_size = INITIAL_WEIGHT_SIZE_MB;
++    // メモリマップファイルを作成
++    p_file_weight = new bip::managed_mapped_file(
++        bip::create_only, mapfile.c_str(), map_weight_size);
++    // メモリマップ内にvocablary 用の領域を確保
++    auto weight_map = p_file_weight->construct<Uldmap>("map_weight")(
++        0, DummyHash(), std::equal_to<Ulkey>(),
++        p_file_weight->get_allocator<weightPair>());
++    dvec.reset(weight_map);
++    return true;
++}                                                                  //}}}
++
+ FeatureVector &FeatureVector::operator=(const FeatureVector &fv) { /*{{{*/
+     mmap_flag = false; // 代入した時点で，メモリマップは無効
+     if (fv.mmap_flag) {
+@@ -115,7 +137,7 @@ FeatureVector &FeatureVector::diff(const
+     return *this;
+ } /*}}}*/
+ 
+-FeatureVector::iterator FeatureVector::find(const unsigned long key) { /*{{{*/
++FeatureVector::iterator FeatureVector::find(const Ulkey key) { /*{{{*/
+     if (mmap_flag) {
+         auto ditr = dvec->find(key);
+         return FeatureVectorIterator(this, ditr);
+@@ -126,7 +148,7 @@ FeatureVector::iterator FeatureVector::f
+ }; /*}}}*/
+ 
+ FeatureVector::const_iterator
+-FeatureVector::find(const unsigned long key) const { /*{{{*/
++FeatureVector::find(const Ulkey key) const { /*{{{*/
+     if (mmap_flag) {
+         auto ditr = dvec->find(key);
+         return ConstFeatureVectorIterator(this, ditr);
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/feature_vector.h jumanpp-1.02/src/feature_vector.h
+--- B:/msys64/tmp/jumanpp-1.02/src/feature_vector.h	Mon Oct  3 13:43:17 2016
++++ jumanpp-1.02/src/feature_vector.h	Fri Oct 20 12:46:09 2017
+@@ -56,6 +56,7 @@ class FeatureVector {/*{{{*/
+     // メモリマップ操作用
+     // Memory mapped file
+     bool mmap_flag = false;
++    std::string name_to_shrink = ""; //  File name to shrink when destructed.
+ 
+     /* 共用イテレータ */
+   public:
+@@ -82,16 +83,19 @@ class FeatureVector {/*{{{*/
+             delete (p_file_weight);
+         }
+         dvec.release();
++        if(name_to_shrink.length()>0) {
++            bip::managed_mapped_file::shrink_to_fit(name_to_shrink.c_str());
++        }
+     } //}}}
+ 
+-    FeatureVector(const std::vector<unsigned long> &v1,
+-                  const std::vector<unsigned long> &v2);
+-    FeatureVector(const std::vector<unsigned long> &v1);
++    FeatureVector(const std::vector<Ulkey> &v1,
++                  const std::vector<Ulkey> &v2);
++    FeatureVector(const std::vector<Ulkey> &v1);
+     FeatureVector(const FeatureVector &);
+ 
+     double operator*(const FeatureVector &fv) const;
+     FeatureVector &operator=(const FeatureVector &fv);
+-    double &operator[](const unsigned long s) { /*{{{*/
++    double &operator[](const Ulkey s) { /*{{{*/
+         static double dummy = 0;
+         if (mmap_flag) {
+             auto itr = dvec->find(s);
+@@ -114,7 +118,7 @@ class FeatureVector {/*{{{*/
+         }
+     }; /*}}}*/
+ 
+-    double get_val(const unsigned long s) { /*{{{*/
++    double get_val(const Ulkey s) { /*{{{*/
+         if (mmap_flag) {
+             auto itr = dvec->find(s);
+             if (itr == dvec->end()) {
+@@ -150,8 +154,8 @@ class FeatureVector {/*{{{*/
+     FeatureVector &merge(const FeatureVector &fv);
+     FeatureVector &diff(const FeatureVector &fv);
+ 
+-    FeatureVector::iterator find(const unsigned long key);
+-    FeatureVector::const_iterator find(const unsigned long key) const;
++    FeatureVector::iterator find(const Ulkey key);
++    FeatureVector::const_iterator find(const Ulkey key) const;
+ 
+     inline std::string str() { /*{{{*/
+         std::stringstream ss;
+@@ -199,7 +203,9 @@ class FeatureVector {/*{{{*/
+         // メモリマップへの書き込みを flush
+         p_file_weight->flush();
+         // メモリマップのサイズ shrink
+-        bip::managed_mapped_file::shrink_to_fit(mapfile.c_str());
++        // bip::managed_mapped_file::shrink_to_fit(mapfile.c_str());
++        name_to_shrink = mapfile;   //  reserve to shrink.
++
+         return true;
+     };                                                                 //}}}
+     bool dynamic_deserialize(std::ifstream &is, std::string mapfile) { //{{{
+@@ -216,21 +222,7 @@ class FeatureVector {/*{{{*/
+     bool exist_mmap(std::string mapfile) { //{{{
+         return (access(mapfile.c_str(), F_OK) != -1);
+     };                                      //}}}
+-    bool create_mmap(std::string mapfile) { //{{{
+-        mmap_flag = true;
+-
+-        // 大きめに1GBとる (通常は40MB程度?，あとでshrink)
+-        unsigned long long map_weight_size = 1024 * 1024 * 1024;
+-        // メモリマップファイルを作成
+-        p_file_weight = new bip::managed_mapped_file(
+-            bip::create_only, mapfile.c_str(), map_weight_size);
+-        // メモリマップ内にvocablary 用の領域を確保
+-        auto weight_map = p_file_weight->construct<Uldmap>("map_weight")(
+-            0, DummyHash(), std::equal_to<Ulkey>(),
+-            p_file_weight->get_allocator<weightPair>());
+-        dvec.reset(weight_map);
+-        return true;
+-    }                                                                  //}}}
++    bool create_mmap(std::string mapfile);  // to feature_vector.cc
+     bool load_selialized_map(std::ifstream &is, std::string mapfile) { //{{{
+         Ulkey key;
+         Ulval value;
+@@ -250,7 +242,8 @@ class FeatureVector {/*{{{*/
+         // メモリマップへの書き込みを flush
+         p_file_weight->flush();
+         // メモリマップのサイズ shrink
+-        bip::managed_mapped_file::shrink_to_fit(mapfile.c_str());
++        // bip::managed_mapped_file::shrink_to_fit(mapfile.c_str());
++        name_to_shrink = mapfile;   //  reserve to shrink at the destractor.
+ 
+         if (dvec->size() != size)
+             return false;
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/hash.h jumanpp-1.02/src/hash.h
+--- B:/msys64/tmp/jumanpp-1.02/src/hash.h	Mon Oct  3 14:12:33 2016
++++ jumanpp-1.02/src/hash.h	Sun Oct 15 22:39:38 2017
+@@ -3,6 +3,9 @@
+ #include <vector>
+ #include <string>
+ #include <stdint.h>
++#if defined(_WIN32) && !defined(__CYGWIN__)
++#include <io.h>
++#endif
+ 
+ typedef std::pair<uint64_t, uint64_t> OWORD;
+ const OWORD constant = OWORD(0x87c37b91114253d5LLU, 0x4cf5ad432745937fLLU);
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/Makefile.in jumanpp-1.02/src/Makefile.in
+--- B:/msys64/tmp/jumanpp-1.02/src/Makefile.in	Wed Jan 11 18:15:46 2017
++++ jumanpp-1.02/src/Makefile.in	Tue Oct 17 04:08:15 2017
+@@ -107,7 +107,8 @@ am_jumanpp_OBJECTS = charlattice.$(OBJEX
+ 	scw.$(OBJEXT) sentence.$(OBJEXT) tagger.$(OBJEXT) \
+ 	tools.$(OBJEXT) u8string.$(OBJEXT) cdb_juman.$(OBJEXT) \
+ 	rnnlm/rnnlmlib_dynamic.$(OBJEXT) \
+-	rnnlm/rnnlmlib_static.$(OBJEXT) feature_vector.$(OBJEXT)
++	rnnlm/rnnlmlib_static.$(OBJEXT) feature_vector.$(OBJEXT) \
++	encoder.$(OBJEXT)
+ jumanpp_OBJECTS = $(am_jumanpp_OBJECTS)
+ jumanpp_LDADD = $(LDADD)
+ jumanpp_LINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(jumanpp_LDFLAGS) \
+@@ -336,10 +337,10 @@ top_srcdir = @top_srcdir@
+ AUTOMAKE_OPTIONS = subdir-objects
+ SUBDIRS = cdb
+ DIST_SUBDIRS = $(SUBDIRS)
+-AM_CXXFLAGS = --std=c++11 -Ofast -m64 -Wall -funroll-loops -ffast-math 
++AM_CXXFLAGS = --std=c++11 -Wall -funroll-loops -ffast-math  
+ jumanpp_LDFLAGS = -L./lib 
+ jumanpp_DEPENDENCIES = ./cdb/libcdb.a
+-jumanpp_SOURCES = charlattice.cc dic.cc feature.cc morph.cc node.cc pos.cc scw.cc sentence.cc tagger.cc tools.cc u8string.cc cdb_juman.cc rnnlm/rnnlmlib_dynamic.cpp rnnlm/rnnlmlib_static.cpp cdb_juman.h charlattice.h cmdline.h common.h darts.h dic.h feature.h node.h parameter.h pos.h scw.h sentence.h tagger.h u8string.h rnnlm/rnnlmlib_dynamic.h rnnlm/rnnlmlib_static.h rnnlm/rnnlmlib.h mmap.h feature_vector.cc feature_vector.h hash.h
++jumanpp_SOURCES = charlattice.cc dic.cc feature.cc morph.cc node.cc pos.cc scw.cc sentence.cc tagger.cc tools.cc u8string.cc cdb_juman.cc rnnlm/rnnlmlib_dynamic.cpp rnnlm/rnnlmlib_static.cpp cdb_juman.h charlattice.h cmdline.h common.h darts.h dic.h feature.h node.h parameter.h pos.h scw.h sentence.h tagger.h u8string.h rnnlm/rnnlmlib_dynamic.h rnnlm/rnnlmlib_static.h rnnlm/rnnlmlib.h mmap.h feature_vector.cc feature_vector.h hash.h encoder.h encoder.cc
+ mkdarts_jumanpp_LDFLAGS = -L./lib 
+ mkdarts_jumanpp_DEPENDENCIES = ./cdb/libcdb.a
+ mkdarts_jumanpp_SOURCES = mkdarts.cc pos.cc pos.h tagger.h hash.h
+@@ -476,6 +477,7 @@ distclean-compile:
+ @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/u8string.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@rnnlm/$(DEPDIR)/rnnlmlib_dynamic.Po@am__quote@
+ @AMDEP_TRUE@@am__include@ @am__quote@rnnlm/$(DEPDIR)/rnnlmlib_static.Po@am__quote@
++@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/encoder.Po@am__quote@
+ 
+ .cc.o:
+ @am__fastdepCXX_TRUE@	$(AM_V_CXX)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/mmap.h jumanpp-1.02/src/mmap.h
+--- B:/msys64/tmp/jumanpp-1.02/src/mmap.h	Wed Jul  6 15:13:31 2016
++++ jumanpp-1.02/src/mmap.h	Sun Oct 15 22:39:50 2017
+@@ -12,7 +12,12 @@ extern "C" {
+ #include <sys/stat.h>
+ #include <fcntl.h>
+ #include <string.h>
++
++#if !defined(_WIN32) || defined(__CYGWIN__)
++// No need for MinGW
+ #include <sys/mman.h>
++#endif
++
+ #include <unistd.h>
+ }
+ 
+@@ -41,6 +46,21 @@ template <class T> class Mmap {
+ #if defined(_WIN32) && !defined(__CYGWIN__)
+     HANDLE hFile;
+     HANDLE hMap;
++/*
++	jmp_buf jmp_env;
++	class jump_log {
++	public:
++		jmp_buf * penv = NULL;
++		jump_log(jmp_buf * penv) { this->penv = penv; }
++		~jump_log() { longjmp(*(this->penv), 1); }
++		int operator && (std::ostream &) { return 0; }
++	};
++#define CHECK_CLOSE_FALSE(condition) if(!(condition)) \
++	if(setjmp(this->jmp_env)==0) { \
++		this->close(); \
++		return false;  \
++	} else jump_log(&(this->jmp_env)) && std::cerr
++*/
+ #else
+     int fd;
+     int flag;
+@@ -62,36 +82,42 @@ template <class T> class Mmap {
+ // This code is imported from sufary, develoved by
+ //  TATUO Yamashita <yto@nais.to> Thanks!
+ #if defined(_WIN32) && !defined(__CYGWIN__)
+-    bool open(const char *filename, const char *mode = "r") {
++	bool open(const char *filename, const char *mode = "r") {
+         this->close();
+         unsigned long mode1, mode2, mode3;
+         fileName = std::string(filename);
+ 
+-        if (std::strcmp(mode, "r") == 0) {
+-            mode1 = GENERIC_READ;
+-            mode2 = PAGE_READONLY;
+-            mode3 = FILE_MAP_READ;
+-        } else if (std::strcmp(mode, "r+") == 0) {
+-            mode1 = GENERIC_READ | GENERIC_WRITE;
+-            mode2 = PAGE_READWRITE;
+-            mode3 = FILE_MAP_ALL_ACCESS;
+-        } else {
+-            CHECK_CLOSE_FALSE(false) << "unknown open mode:" << filename;
++        try {
++            if (std::strcmp(mode, "r") == 0) {
++                mode1 = GENERIC_READ;
++                mode2 = PAGE_READONLY;
++                mode3 = FILE_MAP_READ;
++            } else if (std::strcmp(mode, "r+") == 0) {
++                mode1 = GENERIC_READ | GENERIC_WRITE;
++                mode2 = PAGE_READWRITE;
++                mode3 = FILE_MAP_ALL_ACCESS;
++            } else {
++                throw std::runtime_error("unknown open mode:");
++            }
++
++            hFile = CreateFile(filename, mode1, FILE_SHARE_READ, 0, OPEN_EXISTING,
++                            FILE_ATTRIBUTE_NORMAL, 0);
++            if(hFile==INVALID_HANDLE_VALUE) throw std::runtime_error("CreateFile() failed: ");
++
++            length = GetFileSize(hFile, 0);
++
++            hMap = CreateFileMapping(hFile, 0, mode2, 0, 0, 0);
++            if(hMap==NULL) throw std::runtime_error("CreateFileMapping() failed: ");
++
++            text = reinterpret_cast<T *>(MapViewOfFile(hMap, mode3, 0, 0, 0));
++            if(text==NULL) throw std::runtime_error("MapViewOfFile() failed: ");
++
++        } catch(const std::runtime_error & e) {
++            std::cerr << e.what()  << filename << std::endl;
++            this->close();
++            return false;
+         }
+ 
+-        hFile = CreateFile(filename, mode1, FILE_SHARE_READ, 0, OPEN_EXISTING,
+-                           FILE_ATTRIBUTE_NORMAL, 0);
+-        CHECK_CLOSE_FALSE(hFile != INVALID_HANDLE_VALUE)
+-            << "CreateFile() failed: " << filename;
+-
+-        length = GetFileSize(hFile, 0);
+-
+-        hMap = CreateFileMapping(hFile, 0, mode2, 0, 0, 0);
+-        CHECK_CLOSE_FALSE(hMap) << "CreateFileMapping() failed: " << filename;
+-
+-        text = reinterpret_cast<T *>(MapViewOfFile(hMap, mode3, 0, 0, 0));
+-        CHECK_CLOSE_FALSE(text) << "MapViewOfFile() failed: " << filename;
+-
+         return true;
+     }
+ 
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/morph.cc jumanpp-1.02/src/morph.cc
+--- B:/msys64/tmp/jumanpp-1.02/src/morph.cc	Tue Oct  4 10:23:38 2016
++++ jumanpp-1.02/src/morph.cc	Fri Oct 20 18:04:22 2017
+@@ -11,6 +11,8 @@
+ 
+ #include <memory.h>
+ 
++#include "encoder.h"
++
+ // namespace SRILM {
+ //#include "srilm/Ngram.h"
+ //#include "srilm/Vocab.h"
+@@ -23,6 +25,31 @@
+ bool MODE_TRAIN = false;
+ bool WEIGHT_AVERAGED = false;
+ 
++#if defined(DEFAULT_RESOURCE_PATH) && defined(_WIN32)
++//  Not use for Windows
++#undef DEFAULT_RESOURCE_PATH
++#endif
++
++#ifdef _WIN32
++//  Get name of directory from file path
++#define GET_DIR_NAME(ppath) { \
++    int pos; char *p_c; \
++    pos = strlen(ppath)-1; \
++    p_c = (char *)(ppath) + pos; \
++    for(; pos>0; pos--, p_c--) if(*p_c=='\\' || *p_c=='/') break; \
++    *p_c = 0; \
++}
++#define IS_ABS_PATH(s_path) ( *(s_path)=='/' || *(s_path)=='\\' || *(s_path+1)==':')
++
++std::string get_home_path() { /*{{{*/
++    std::string home_path;
++    char phome[MAX_PATH];
++    GetModuleFileName( NULL, phome, sizeof(phome));
++    GET_DIR_NAME(phome);
++    if( phome[0] ) home_path = phome;
++    return home_path;
++} /*}}}*/
++#else   //  Not _WIN32
+ std::string get_home_path() { /*{{{*/
+     char *phome;
+     std::string home_path;
+@@ -31,7 +58,18 @@ std::string get_home_path() { /*{{{*/
+         home_path = phome;
+     return home_path;
+ } /*}}}*/
++#endif   //  _WIN32
+ 
++#ifdef _WIN32
++std::string get_current_path() { /*{{{*/
++    std::string home_path;
++    TCHAR phome[MAX_PATH];
++    if( GetCurrentDirectory(sizeof(phome)/sizeof(TCHAR), phome) ) {
++        home_path = phome;
++    }
++    return home_path;
++} /*}}}*/
++#else   //  Not _WIN32
+ std::string get_current_path() { /*{{{*/
+     char *phome;
+     std::string home_path;
+@@ -40,10 +78,16 @@ std::string get_current_path() { /*{{{*/
+         home_path = phome;
+     return home_path;
+ } /*}}}*/
++#endif   //  _WIN32
+ 
+ std::string read_jumanpprc() { /*{{{*/
+     std::string home_path = get_home_path();
+     std::string current_path = get_current_path();
++#ifdef _WIN32
++    std::string jumanpprc_path = home_path + "/jumanpprc";
++    std::string default_model_path = home_path + "/dics";
++
++#else   //  Not _WIN32
+     std::string jumanpprc_path = home_path + "/.jumanpprc";
+ 
+ #ifdef DEFAULT_RESOURCE_PATH
+@@ -52,6 +96,8 @@ std::string read_jumanpprc() { /*{{{*/
+     std::string default_model_path = current_path + "/.jumanpp";
+ #endif
+ 
++#endif  //  Not _WIN32
++
+     FILE *jumanpprc_file = fopen((jumanpprc_path).c_str(), "r");
+     if (jumanpprc_file == NULL) {
+         return default_model_path;
+@@ -62,17 +108,27 @@ std::string read_jumanpprc() { /*{{{*/
+                     "WARNING: .jumanpprc file does not contain valid path\n");
+             return default_model_path;
+         }
+-        return buffer;
++        if( IS_ABS_PATH(buffer) ) return buffer;
++        int pos = jumanpprc_path.find_last_of("/");
++        int pos2 = jumanpprc_path.find_last_of("\\");
++        pos = (pos>=0 && pos>pos2)? pos: pos2;
++        std::string ret_str("/");
++        if(pos>=0) ret_str = jumanpprc_path.substr(0, pos+1);
++        ret_str += buffer;
++        return ret_str;
+     }
+ } /*}}}*/
+ 
+ // オプション
+ void option_proc(cmdline::parser &option, std::string model_path, int argc,
+                  char **argv) { //{{{
++#ifdef _WIN32
++    std::string bin_dir = get_home_path();
++#else
+     std::string bin_path(argv[0]);
+     std::string bin_dir =
+         bin_path.substr(0, bin_path.rfind('/')); // Windows 非対応
+-
++#endif
+     // 設定の読み込みオプション
+     option.add<std::string>("dir", 'D', "set resource directory", false,
+                             model_path);
+@@ -130,6 +186,11 @@ void option_proc(cmdline::parser &option
+     option.add("debug", '\0', "debug mode");
+     option.add("rnndebug", '\0', "show rnnlm debug message");
+ 
++    //  for EncodeProc
++    option.add<std::string>("encoding", 0, "input and output encoding", false);
++    option.add<std::string>("i-file", 0, "path to input file", false);
++    option.add<std::string>("o-file", 0, "prth to output file", false);
++    
+ #ifdef USE_DEV_OPTION
+     // 開発用オプション
+     option.add<std::string>("gold-lattice", 0,
+@@ -175,7 +236,7 @@ void parse_dynamic_command(std::string b
+         arg_pos = buffer.find_first_of(" \t", arg_pos + command.length());
+         long val = std::stol(buffer.substr(arg_pos));
+         param.set_L(val);
+-        std::cout << "##JUMAN++\t" << command << " " << val << std::endl;
++        *(param.p_out) << "##JUMAN++\t" << command << " " << val << std::endl;
+     }
+ 
+     command = "set-beam";
+@@ -183,19 +244,19 @@ void parse_dynamic_command(std::string b
+         arg_pos = buffer.find_first_of(" \t", arg_pos + command.length());
+         long val = std::stol(buffer.substr(arg_pos));
+         param.set_N(val);
+-        std::cout << "##JUMAN++\t" << command << " " << val << std::endl;
++        *(param.p_out) << "##JUMAN++\t" << command << " " << val << std::endl;
+     }
+ 
+     command = "unset-force-single-path";
+     if ((arg_pos = buffer.find(command)) != std::string::npos) {
+         param.set_output_ambigous_word(true);
+-        std::cout << "##JUMAN++\t" << command << " " << std::endl;
++        *(param.p_out) << "##JUMAN++\t" << command << " " << std::endl;
+     }
+ 
+     command = "set-force-single-path";
+     if ((arg_pos = buffer.find(command)) != std::string::npos) {
+         param.set_output_ambigous_word(false);
+-        std::cout << "##JUMAN++\t" << command << " " << std::endl;
++        *(param.p_out) << "##JUMAN++\t" << command << " " << std::endl;
+     }
+     return;
+ } //}}}
+@@ -422,17 +483,27 @@ int main(int argc, char **argv) { //{{{
+ #endif
+     } else { // 通常の形態素解析{{{
+         tagger.read_bin_model_file(model_path);
+-        std::ifstream is(argv[1]);
+ 
++        //  Encoder
++        EncodeProc encode_proc( "UTF-8",
++            option.get<std::string>("encoding").c_str(),
++            option.get<std::string>("i-file").c_str(),
++            option.get<std::string>("o-file").c_str() );
++        param.p_out = encode_proc.get_stdout();
++        std::istream * p_in = encode_proc.get_stdin();
++        if(NULL==p_in) exit(1); // Fail to open file.
++    
+         // sentence loop
+         std::string buffer;
+-        while (getline(is ? is : cin, buffer)) {
++        while (getline(*p_in, buffer)) {
++            if(!encode_proc.convert(buffer)) continue;
++
+             if (buffer.length() < 1) { // empty line
+-                std::cout << std::endl;
++                *(param.p_out) << std::endl;
+                 continue;
+             } else if (buffer.at(0) == '#') {
+                 if (buffer.length() <= 1) {
+-                    std::cout << buffer << Morph::version() << std::endl;
++                    *(param.p_out) << buffer << Morph::version() << std::endl;
+                     continue;
+                 }
+ 
+@@ -441,7 +512,7 @@ int main(int argc, char **argv) { //{{{
+                     // 動的コマンドの処理
+                     parse_dynamic_command(buffer, param);
+                 } else { // コメント，S-ID の処理
+-                    std::cout << buffer << Morph::version() << std::endl;
++                    *(param.p_out) << buffer << Morph::version() << std::endl;
+                 }
+                 continue;
+             }
+@@ -485,7 +556,9 @@ int main(int argc, char **argv) { //{{{
+                 tagger.print_best_beam_juman();
+             }
+             tagger.sentence_clear();
+-        }
++
++            encode_proc.flush();
++        }   //  while
+     } //}}}
+     return 0;
+ } //}}}
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/node.h jumanpp-1.02/src/node.h
+--- B:/msys64/tmp/jumanpp-1.02/src/node.h	Tue Dec 27 21:39:38 2016
++++ jumanpp-1.02/src/node.h	Fri Oct 20 17:42:57 2017
+@@ -25,17 +25,17 @@ class BeamQue;
+ struct morph_token_t { //{{{
+     unsigned short lcAttr;
+     unsigned short rcAttr;
+-    unsigned long posid;        // id of part of speech
+-    unsigned long spos_id;      // 細分類
+-    unsigned long form_id;      // 活用形
+-    unsigned long form_type_id; // 活用型
+-    unsigned long base_id;      // 活用型
++    uint64_t posid;        // id of part of speech
++    uint64_t spos_id;      // 細分類
++    uint64_t form_id;      // 活用形
++    uint64_t form_type_id; // 活用型
++    uint64_t base_id;      // 活用型
+     unsigned short length;      // 単語の長さ
+     short wcost;                // cost of this morpheme
+ 
+-    unsigned long rep_id;     // 代表表記
+-    unsigned long imis_id;    // 意味情報
+-    unsigned long reading_id; // 読み
++    uint64_t rep_id;     // 代表表記
++    uint64_t imis_id;    // 意味情報
++    uint64_t reading_id; // 読み
+ 
+     // TODO: 品詞(juman_id) を含める
+ 
+@@ -189,14 +189,14 @@ class Node { //{{{
+     unsigned short char_num = 0; // charlattice で指定する．
+     unsigned short rcAttr = 0;
+     unsigned short lcAttr = 0;
+-    unsigned long posid = 0;
+-    unsigned long sposid = 0;
+-    unsigned long formid = 0;
+-    unsigned long formtypeid = 0;
+-    unsigned long baseid = 0;
+-    unsigned long repid = 0;
+-    unsigned long imisid = 0;
+-    unsigned long readingid = 0;
++    uint64_t posid = 0;
++    uint64_t sposid = 0;
++    uint64_t formid = 0;
++    uint64_t formtypeid = 0;
++    uint64_t baseid = 0;
++    uint64_t repid = 0;
++    uint64_t imisid = 0;
++    uint64_t readingid = 0;
+     std::string *pos = nullptr; // weak ptr
+     std::string *spos = nullptr;
+     std::string *form = nullptr;
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/parameter.h jumanpp-1.02/src/parameter.h
+--- B:/msys64/tmp/jumanpp-1.02/src/parameter.h	Thu Aug 25 13:55:19 2016
++++ jumanpp-1.02/src/parameter.h	Fri Oct 20 16:30:18 2017
+@@ -60,8 +60,10 @@ class Parameter {
+     bool unknown_word_detection;
+     /*******************************************************/
+ 
+-    std::vector<unsigned long> unk_pos;
+-    std::vector<unsigned long> unk_figure_pos;
++    std::vector<uint64_t> unk_pos;
++    std::vector<uint64_t> unk_figure_pos;
++
++    std::ostream * p_out = &(std::cout);
+ 
+     int set_N(unsigned int n) {
+         if (n > 1000)
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/pos.cc jumanpp-1.02/src/pos.cc
+--- B:/msys64/tmp/jumanpp-1.02/src/pos.cc	Thu Sep  1 17:28:37 2016
++++ jumanpp-1.02/src/pos.cc	Fri Oct 20 16:23:48 2017
+@@ -1,11 +1,27 @@
+ #include "common.h"
+ #include "pos.h"
+ 
++//  To diagnose boost exceptions.
++#include <boost/exception/get_error_info.hpp>
++#include <boost/exception/diagnostic_information.hpp>
++#include <boost/exception/errinfo_api_function.hpp>
++#include <boost/exception/errinfo_errno.hpp>
++#include <boost/exception/errinfo_file_name.hpp>
++
++//  Initial map size in MByte when create.
++#define INITIAL_MAP_SIZE_MB (200 * MEGABYTE)
++// #define INITIAL_MAP_SIZE_MB (1024 * MEGABYTE) // Original size
++
+ namespace Morph {
+ Pos::Pos() {}
+ 
++//  Deeestructor
++Pos::~Pos() {
++    if(p_file != nullptr) delete p_file;
++}
++
+ // 新規の品詞を登録する（BOS，UNK など）
+-unsigned long Pos::register_pos(const std::string &pos_str) { //{{{
++uint64_t Pos::register_pos(const std::string &pos_str) { //{{{
+     auto hashval = str_hash(pos_str);
+     auto itr = rdic.find(hashval);
+ 
+@@ -15,12 +31,13 @@ unsigned long Pos::register_pos(const st
+     return hashval;
+ } //}}}
+ 
+-unsigned long Pos::register_pos(char const *pos_str) { //{{{
++uint64_t Pos::register_pos(char const *pos_str) { //{{{
+     std::string str = std::string(pos_str);
+     return register_pos(str);
+ } //}}}
+ 
+-std::string *Pos::get_pos(unsigned long posid) { //{{{
++
++std::string *Pos::get_pos(uint64_t posid) { //{{{
+     // メモリは余分に使うが，rd_dic で引いた結果を rdic に移してその結果を返す
+     auto rdic_itr = rdic.find(posid);
+     if (rdic_itr != rdic.end()) {
+@@ -54,11 +71,41 @@ bool Pos::write_pos_list(const std::stri
+ } //}}}
+ 
+ bool Pos::read_pos_list(const std::string &pos_filename) { //{{{
+-    if (valid_mmap(pos_filename)) {
+-        load_mmap(pos_filename);
+-    } else {
+-        load_selialized_map(pos_filename);
++    try {
++        if (valid_mmap(pos_filename)) {
++            load_mmap(pos_filename);
++        } else {
++            load_selialized_map(pos_filename);
++        }
++    } catch(...) {
++        BoostExceptionProc();
+     }
+     return true;
+ } //}}}
++    
++bool Pos::create_mmap(const std::string &mapfile) { //{{{
++    mmap_flag = true;
++
++    // 大きめに1GBとる (通常は40MB程度?，あとでshrink)
++    //  INITIAL_MAP_SIZE_MB is defined at top of this file.
++    unsigned long long map_size = INITIAL_MAP_SIZE_MB;
++    // メモリマップファイルを作成
++    p_file = new bip::managed_mapped_file(bip::create_only, mapfile.c_str(),
++                                          map_size);
++    auto rd_pos_map = p_file->construct<RDmap>("rdmap")(
++        0, DummyHash(), std::equal_to<RDkey>(),
++        p_file->get_allocator<RDpair>());
++    rd_dic = rd_pos_map;
++    return true;
++}                                                           //}}}
++
++/**
++ * Show infomation of exception about Boost lib.
++ * then, exit.
++ */
++ void BoostExceptionProc(void) {
++    std::cerr << boost::current_exception_diagnostic_information(1) << "\n";
++    exit(-1);
++}
++
+ }
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/pos.h jumanpp-1.02/src/pos.h
+--- B:/msys64/tmp/jumanpp-1.02/src/pos.h	Mon Oct  3 13:47:03 2016
++++ jumanpp-1.02/src/pos.h	Fri Oct 20 17:21:42 2017
+@@ -13,6 +13,10 @@
+ #include <boost/interprocess/containers/vector.hpp>
+ #include <boost/interprocess/containers/string.hpp>
+ #include <boost/unordered_map.hpp>
++
++#ifdef _WIN32
++#define strtoul(a,b,c)   _strtoui64(a,b,c)
++#endif
+ namespace bip = boost::interprocess;
+ 
+ typedef bip::managed_mapped_file::segment_manager mapped_file_manager;
+@@ -43,9 +47,9 @@ namespace Morph {
+ 
+ class Pos {
+     // unsigned long count;
+-    std::unordered_map<std::string, unsigned long> dic;
++    std::unordered_map<std::string, uint64_t> dic;
+     MurMurHash3_str str_hash;
+-    std::unordered_map<unsigned long, std::string> rdic;
++    std::unordered_map<uint64_t, std::string> rdic;
+     RDmap *rd_dic;
+ 
+   private:
+@@ -54,21 +58,22 @@ class Pos {
+ 
+   public:
+     Pos();
+-
++    ~Pos();
++    
+     // 品詞名からIDを引く
+-    inline unsigned long get_id(const std::string &pos_str) {
++    inline uint64_t get_id(const std::string &pos_str) {
+         return str_hash(pos_str);
+     }
+ 
+-    inline unsigned long get_id(char const *pos_str) {
++    inline uint64_t get_id(char const *pos_str) {
+         std::string pos_string = std::string(pos_str);
+         return get_id(pos_string);
+     }
+ 
+-    unsigned long register_pos(const std::string &pos_str);
+-    unsigned long register_pos(const char *pos_str);
++    uint64_t register_pos(const std::string &pos_str);
++    uint64_t register_pos(const char *pos_str);
+ 
+-    std::string *get_pos(unsigned long posid);
++    std::string *get_pos(uint64_t posid);
+     bool write_pos_list(const std::string &pos_filename);
+     bool read_pos_list(const std::string &pos_filename);
+ 
+@@ -78,27 +83,16 @@ class Pos {
+         // TODO: mapfile が pos_filename より新しいことを確認する．
+         return (access(mapfile.c_str(), F_OK) != -1);
+     };                                             //}}}
+-    bool create_mmap(const std::string &mapfile) { //{{{
+-        mmap_flag = true;
+ 
+-        // 大きめに1GBとる (通常は40MB程度?，あとでshrink)
+-        unsigned long long map_size = 1024 * 1024 * 1024;
+-        // メモリマップファイルを作成
+-        p_file = new bip::managed_mapped_file(bip::create_only, mapfile.c_str(),
+-                                              map_size);
+-        auto rd_pos_map = p_file->construct<RDmap>("rdmap")(
+-            0, DummyHash(), std::equal_to<RDkey>(),
+-            p_file->get_allocator<RDpair>());
+-        rd_dic = rd_pos_map;
+-        return true;
+-    }                                                           //}}}
++    bool create_mmap(const std::string &mapfile);   // move to pos.cc
++
+     bool load_selialized_map(const std::string &pos_filename) { //{{{
+         std::string map_filename = pos_filename + ".map";
+         create_mmap(map_filename);
+         mmap_flag = true;
+-
++    
+         rd_dic->clear();
+-
++    
+         // 普通の読み込み
+         std::ifstream pos_in(pos_filename.c_str(), std::ios::in);
+         if (!pos_in.is_open()) {
+@@ -106,7 +100,7 @@ class Pos {
+                  << pos_filename.c_str() << endl;
+             return false;
+         }
+-
++    
+         std::string buffer;
+         allocator_char charallocator(p_file->get_segment_manager());
+         while (getline(pos_in, buffer)) {
+@@ -115,18 +109,20 @@ class Pos {
+             auto key = strtoul(static_cast<const char *>(line[1].c_str()),
+                                nullptr, 10);
+             rdic[key] = line[0];
+-
++    
+             RDval str(charallocator);
+             str = line[0].c_str();
+             rd_dic->insert(std::make_pair(key, str));
+         }
+         pos_in.close();
+-
++    
+         // メモリマップへの書き込みを flush
+         p_file->flush();
+         // メモリマップのサイズ shrink
++        delete p_file;
+         bip::managed_mapped_file::shrink_to_fit(map_filename.c_str());
+-
++        p_file = new bip::managed_mapped_file(bip::open_only, map_filename.c_str());
++        
+         return true;
+     };                                                //}}}
+     bool load_mmap(const std::string &pos_filename) { //{{{
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/rnnlm/rnnlmlib_dynamic.cpp jumanpp-1.02/src/rnnlm/rnnlmlib_dynamic.cpp
+--- B:/msys64/tmp/jumanpp-1.02/src/rnnlm/rnnlmlib_dynamic.cpp	Wed Jun  1 16:25:40 2016
++++ jumanpp-1.02/src/rnnlm/rnnlmlib_dynamic.cpp	Fri Oct 20 09:37:56 2017
+@@ -25,6 +25,19 @@
+ #include <boost/unordered_map.hpp>
+ #include "rnnlmlib_dynamic.h"
+ 
++#if defined(_WIN32) && !defined(__CYGWIN__)
++    #include <io.h>
++    #ifdef PRIu64
++        #undef PRIu64
++        #define PRIu64 "I64u"
++    #endif
++#endif
++
++//  Initial map size in MByte when create.
++#define MEGABYTE (1024 * 1024)
++#define INITIAL_MAP_SIZE_MB (50 * MEGABYTE)
++//  #define INITIAL_MAP_SIZE_MB (1024 * MEGABYTE)   //  Original size
++
+ #ifndef exp10
+     #define exp10(x) pow((double)10, (x))
+ #endif
+@@ -35,7 +48,7 @@ namespace RNNLM{
+         size_t read = fread(ptr, size, count, fo);
+         if (read != count) {
+             fprintf(
+-                    stderr, "ERROR: expected to read %zu elements, but read %zu elements (%s)\n",
++                    stderr, "ERROR: expected to read %" PRIu64 " elements, but read %" PRIu64 " elements (%s)\n",
+                     count, read, message);
+             exit(1);
+         }
+@@ -61,7 +74,7 @@ namespace RNNLM{
+         }
+ 
+         // direct
+-        unsigned long int maxent_hash_size;
++        uint64_t maxent_hash_size;
+         FreadAllOrDie_dyn(&maxent_hash_size, sizeof(int64_t), 1, file, error_message);
+         unsigned int maxent_order;
+         FreadAllOrDie_dyn(&maxent_order, sizeof(int), 1, file, error_message);
+@@ -196,9 +209,6 @@ namespace RNNLM{
+     // RNNLM モデル，語彙の読み込みを行う(faster-rnnlm 対応版)
+     void CRnnLM_dyn::restoreNet_FR()    //will read whole network structure
+     {//{{{
+-        int a, b;
+-        float fl;
+-
+         // Filename
+         const std::string model_vocab_file = rnnlm_file; 
+         const std::string model_weight_file = model_vocab_file + ".nnet"; // ネットワークの重み
+@@ -221,7 +231,7 @@ namespace RNNLM{
+                 std::cerr << "read original file" << std::endl;
+             
+             // 大きめに1GB (10M文で85MB程度)とる(あとでshrink)
+-            unsigned long long map_vocab_size = 1024 * 1024 * 1024; 
++            unsigned long long map_vocab_size = INITIAL_MAP_SIZE_MB; 
+             // メモリマップファイルを作成
+             p_file_vocab = new bip::managed_mapped_file(bip::create_only, MapVocabFilePath.c_str(), map_vocab_size ); 
+             // メモリマップ内にvocablary 用の領域を確保
+@@ -249,7 +259,10 @@ namespace RNNLM{
+             // メモリマップへの書き込みを flush
+             p_file_vocab->flush();
+             // メモリマップのサイズ shrink
++            delete p_file_vocab;
+             bip::managed_mapped_file::shrink_to_fit(MapVocabFilePath.c_str());
++            p_file_vocab = new bip::managed_mapped_file(bip::open_only, MapVocabFilePath.c_str());
++            vocab_map = p_file_vocab->find<umap_vocab>("map_vocab").first;
+         }
+         fclose(vocab_file);
+         
+@@ -313,6 +326,8 @@ namespace RNNLM{
+             syn_rec      = p_file_syn->construct<vector_syn>("syn_rec")(p_file_syn->get_segment_manager());
+             syn_l1_l2    = p_file_syn->construct<vector_syn>("syn_l1_l2")(p_file_syn->get_segment_manager());
+ 
++            int a, b;
++            float fl;
+             if(debug_mode>0)
+                 std::cerr << "reading embedding" << std::endl;
+             syn_vocab_l1->resize(vocab_size*layer1_size);
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/rnnlm/rnnlmlib_dynamic.h jumanpp-1.02/src/rnnlm/rnnlmlib_dynamic.h
+--- B:/msys64/tmp/jumanpp-1.02/src/rnnlm/rnnlmlib_dynamic.h	Thu Aug 25 13:55:19 2016
++++ jumanpp-1.02/src/rnnlm/rnnlmlib_dynamic.h	Fri Oct 20 09:41:43 2017
+@@ -90,7 +90,7 @@ class CRnnLM_dyn : public CRnnLM {
+     typedef bip::basic_string<char, std::char_traits<char>, CharAllocator>
+         MmfString;
+     typedef std::pair<const MmfString, int> VocabPair;
+-    typedef std::pair<unsigned long, int> hashPair;
++    typedef std::pair<uint64_t, int> hashPair;
+ 
+     // typedef bip::allocator<VocabPair,
+     // bip::managed_mapped_file::segment_manager>
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/rnnlm/rnnlmlib_static.cpp jumanpp-1.02/src/rnnlm/rnnlmlib_static.cpp
+--- B:/msys64/tmp/jumanpp-1.02/src/rnnlm/rnnlmlib_static.cpp	Wed Jun  1 16:25:53 2016
++++ jumanpp-1.02/src/rnnlm/rnnlmlib_static.cpp	Fri Oct 20 09:43:54 2017
+@@ -32,13 +32,20 @@
+     #define exp10(x) pow((double)10, (x))
+ #endif
+ 
++#if defined(_WIN32) && !defined(__CYGWIN__)
++    #ifdef PRIu64
++        #undef PRIu64
++        #define PRIu64 "I64u"
++    #endif
++#endif
++
+ namespace RNNLM{
+ 
+     inline void FreadAllOrDie(void* ptr, size_t size, size_t count, FILE* fo, const char* message) {/*{{{*/
+         size_t read = fread(ptr, size, count, fo);
+         if (read != count) {
+             fprintf(
+-                    stderr, "ERROR: expected to read %zu elements, but read %zu elements (%s)\n",
++                    stderr, "ERROR: expected to read %" PRIu64 " elements, but read %" PRIu64 " elements (%s)\n",
+                     count, read, message);
+             exit(1);
+         }
+@@ -64,7 +71,7 @@ namespace RNNLM{
+         }
+ 
+         // direct
+-        unsigned long int maxent_hash_size;
++        uint64_t maxent_hash_size;
+         FreadAllOrDie(&maxent_hash_size, sizeof(int64_t), 1, file, error_message);
+         unsigned int maxent_order;
+         FreadAllOrDie(&maxent_order, sizeof(int), 1, file, error_message);
+@@ -214,7 +221,7 @@ namespace RNNLM{
+         syn_d=(direct_t *)calloc((long long)direct_size, sizeof(direct_t));
+ 
+         if (syn_d==NULL) {
+-            printf("Memory allocation for direct connections failed (requested %lld bytes)\n", (long long)direct_size * (long long)sizeof(direct_t));
++            printf("Memory allocation for direct connections failed (requested %" PRIu64 " bytes)\n", (long long)direct_size * (long long)sizeof(direct_t));
+             exit(1);
+         }
+ 
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/scw.cc jumanpp-1.02/src/scw.cc
+--- B:/msys64/tmp/jumanpp-1.02/src/scw.cc	Mon Oct  3 14:16:37 2016
++++ jumanpp-1.02/src/scw.cc	Fri Oct 20 13:15:03 2017
+@@ -11,7 +11,7 @@ void DiagMat::update(double beta, const 
+     }
+ };
+ 
+-double &DiagMat::ref_value(const unsigned long sp1, const unsigned long sp2) {
++double &DiagMat::ref_value(const Ulkey sp1, const Ulkey sp2) {
+     auto key = sp1;
+     // 対角行列以外は非サポートだが，とりあえず計算する
+     murmur_combine(key, sp2);
+@@ -33,7 +33,7 @@ double &DiagMat::ref_value(const unsigne
+     }
+ };
+ 
+-double DiagMat::get_value(const unsigned long sp1) const {
++double DiagMat::get_value(const Ulkey sp1) const {
+     auto key = sp1;
+     murmur_combine(key, sp1);
+ 
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/scw.h jumanpp-1.02/src/scw.h
+--- B:/msys64/tmp/jumanpp-1.02/src/scw.h	Tue Oct  4 18:28:30 2016
++++ jumanpp-1.02/src/scw.h	Fri Oct 20 13:14:34 2017
+@@ -20,10 +20,10 @@ class DiagMat {/*{{{*/
+ 
+   public:
+     void update(double beta, const FeatureVector &x);
+-    double get_value(const unsigned long sp1) const;
+-    inline double &operator[](const unsigned long s) { return ref_value(s); };
+-    double &ref_value(const unsigned long sp1, const unsigned long sp2);
+-    double &ref_value(const unsigned long sp1) { return ref_value(sp1, sp1); };
++    double get_value(const Ulkey sp1) const;
++    inline double &operator[](const Ulkey s) { return ref_value(s); };
++    double &ref_value(const Ulkey sp1, const Ulkey sp2);
++    double &ref_value(const Ulkey sp1) { return ref_value(sp1, sp1); };
+ 
+     // ベクトルとの積を定義
+     //        std::vector<std::pair<unsigned long, double>> mXvt(const
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/sentence.cc jumanpp-1.02/src/sentence.cc
+--- B:/msys64/tmp/jumanpp-1.02/src/sentence.cc	Mon Dec 26 13:33:14 2016
++++ jumanpp-1.02/src/sentence.cc	Sat Oct 21 14:27:12 2017
+@@ -77,7 +77,11 @@ void Sentence::init_rnnlm(RNNLM::CRnnLM 
+ void Sentence::init_rnnlm_FR(RNNLM::CRnnLM *in_rnnlm) { /*{{{*/
+     rnnlm = in_rnnlm;
+     RNNLM::context tmp;
+-    rnnlm->get_initial_context_FR(&tmp);
++    try {
++        rnnlm->get_initial_context_FR(&tmp);
++    } catch(...) {
++        BoostExceptionProc();
++    }
+     initial_context = std::make_shared<RNNLM::context>(tmp);
+ } /*}}}*/
+ 
+@@ -260,7 +264,7 @@ Node *Sentence::make_unk_pseudo_node_lis
+         auto tmp_node = result_node;
+         while (tmp_node->bnext) {
+             tmp_node = tmp_node->bnext;
+-            std::cout << tmp_node->string_for_print << std::endl;
++            *(param->p_out) << tmp_node->string_for_print << std::endl;
+         }
+         tmp_node->bnext = r_node;
+         return result_node;
+@@ -1300,7 +1304,7 @@ void Sentence::print_unified_lattice_rbe
+         }
+         char_num++;
+     }
+-    cout << ss.str() << "EOS" << endl;
++    *(param->p_out) << ss.str() << "EOS" << endl;
+ } //}}}
+ 
+ // Node か Dic でやるべき処理(get ではなく、BOSノードの生成)
+@@ -1525,7 +1529,7 @@ bool Sentence::beam_at_position(unsigned
+                                     rnnlm_rep, get_rnnlm_word_length(r_node));
+                     context_score += rnn_score;
+                     if (param->rnndebug)
+-                        std::cout << "lw:" << *l_node->original_surface << ":"
++                        *(param->p_out) << "lw:" << *l_node->original_surface << ":"
+                                   << *l_node->pos
+                                   << " rw:" << *r_node->original_surface << ":"
+                                   << rnnlm_rep << "("
+@@ -1661,9 +1665,9 @@ void Sentence::print_beam() { //{{{
+             }
+         }
+ 
+-        cout << "# score:" << token.score
++        *(param->p_out) << "# score:" << token.score
+              << " # context: " << token.context_score << endl;
+-        cout << output_string_buffer << endl;
++        *(param->p_out) << output_string_buffer << endl;
+         output_string_buffer.clear();
+     }
+ } //}}}
+@@ -1691,7 +1695,7 @@ void Sentence::print_best_beam() { //{{{
+         }
+ 
+         // cout << "# score:" << token.score << endl;
+-        std::cout << output_string_buffer << std::endl;
++        *(param->p_out) << output_string_buffer << std::endl;
+         output_string_buffer.clear();
+ 
+         return;
+@@ -1764,7 +1768,7 @@ void Sentence::print_gold_beam() { //{{{
+         }
+     }
+ 
+-    std::cout << ss.str() << "EOS" << std::endl;
++    *(param->p_out) << ss.str() << "EOS" << std::endl;
+ } //}}}
+ 
+ void Sentence::print_best_beam_rep() { //{{{
+@@ -1786,7 +1790,7 @@ void Sentence::print_best_beam_rep() { /
+         }
+ 
+         // cout << "# score:" << token.score << endl;
+-        std::cout << output_string_buffer << std::endl;
++        *(param->p_out) << output_string_buffer << std::endl;
+         output_string_buffer.clear();
+ 
+         return;
+@@ -1967,7 +1971,7 @@ void Sentence::print_best_beam_juman() {
+             }
+         }
+ 
+-        std::cout << output_string_buffer.str() << "EOS" << std::endl;
++        *(param->p_out) << output_string_buffer.str() << "EOS" << std::endl;
+ 
+         return;
+     }
+diff -rupBN -x stamp-h1 -x winconf -x jumanpprc -x libtool -x .libs -x .deps -x config.* -x *.log -x *.o -x *.lo -x *.a -x *.la -x *.so -x *.exe -x Makefile B:/msys64/tmp/jumanpp-1.02/src/tagger.cc jumanpp-1.02/src/tagger.cc
+--- B:/msys64/tmp/jumanpp-1.02/src/tagger.cc	Thu Aug 25 13:55:19 2016
++++ jumanpp-1.02/src/tagger.cc	Tue Oct 17 03:53:18 2017
+@@ -277,7 +277,7 @@ bool Tagger::read_gold_data(const char *
+     }
+ 
+     gsd_in_fs.close();
+-    std::cout << std::endl;
++    *(param->p_out) << std::endl;
+     return true;
+ } //}}}
+ 
+@@ -318,7 +318,7 @@ bool Tagger::read_partial_gold_data(cons
+     }
+ 
+     gsd_in.close();
+-    std::cout << std::endl;
++    *(param->p_out) << std::endl;
+     return true;
+ } //}}}
+ 
