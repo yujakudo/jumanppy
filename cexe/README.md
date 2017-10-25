@@ -58,7 +58,6 @@ MSYS2のMinGW 64bit上でビルドの実績があります。
 ビルドには以下のパッケージが必要です。（カッコ内は実績のあるバージョン）
 - libgcc, libstdc++ (6.3.0-1)
 - libwinpthread (5.0.0.4761.02bea78-1)
-- libintl (0.19.7-3)
 - libiconv (1.14-6)
 
 mingw-w64-x86_64-toolchain に含まれるツール、patch, tar, unzip, perlなども必要です。
